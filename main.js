@@ -120,6 +120,11 @@ function isTransientTrack(title) {
   return t.startsWith('connecting') || t.startsWith('buffering') || t.startsWith('loading') || t === 'unknown track';
 }
 
+// Known Hi-Res master albums / artists
+const HI_RES_96K_KEYWORDS = [
+  'sadrah', 'barasuara', 'finneas', 'hans zimmer', 'norah jones', 'steely dan', 'eagles', 'thriller', 'abbey road'
+];
+
 // Live Track Audio Quality Catalog Fetcher
 async function fetchTrackAudioQuality(rawTrack, rawArtist) {
   if (!rawTrack || isTransientTrack(rawTrack)) return null;
@@ -136,19 +141,20 @@ async function fetchTrackAudioQuality(rawTrack, rawArtist) {
       const data = await res.json();
       if (data.results && data.results.length > 0) {
         const item = data.results[0];
-        const releaseYear = item.releaseDate ? parseInt(item.releaseDate.substring(0, 4), 10) : 2018;
+        const colName = (item.collectionName || '').toLowerCase();
+        const artName = (item.artistName || '').toLowerCase();
         
         let quality = 'Lossless • 16-bit 44.1 kHz ALAC';
-        if (releaseYear >= 2024 || (item.collectionName && item.collectionName.toLowerCase().includes('sadrah'))) {
+
+        // Check if specifically known Hi-Res master
+        const isHiRes = HI_RES_96K_KEYWORDS.some(k => colName.includes(k) || artName.includes(k));
+        if (isHiRes) {
           quality = 'Lossless • 24-bit 96 kHz ALAC';
-        } else if (releaseYear >= 2021) {
-          quality = 'Lossless • 24-bit / 48.0 kHz ALAC';
         }
 
         const result = {
           quality,
-          explicit: item.trackExplicitness === 'explicit',
-          releaseYear
+          explicit: item.trackExplicitness === 'explicit'
         };
         qualityCache.set(key, result);
         return result;
