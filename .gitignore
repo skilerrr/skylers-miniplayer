@@ -1,0 +1,4 @@
+node_modules/
+cover_temp.jpg
+.DS_Store
+*.log

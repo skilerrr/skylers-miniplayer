@@ -1,0 +1,907 @@
+/* ==========================================================================
+   APPLE MUSIC OG HIERARCHY, ACCURATE ALBUM AMBIENT & RETRO THEMES
+   ========================================================================== */
+
+/* --- Fonts & Base Tokens --- */
+:root {
+  --font-modern: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-pixel-heading: 'Press Start 2P', monospace;
+  --font-pixel-ui: 'Silkscreen', 'DotGothic16', monospace;
+  --font-pixel-body: 'VT323', 'DotGothic16', monospace;
+  --font-cjk: 'DotGothic16', sans-serif;
+  --transition-smooth: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-spring: 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+
+  /* Dynamic Subtle Album Palette Colors (Live from Artwork) */
+  --color-primary: #1d4e68;
+  --color-secondary: #cf353e;
+  --color-dark: #121d24;
+  --color-glow: rgba(29, 78, 104, 0.4);
+}
+
+/* ==========================================================================
+   1. THEME: APPLE MUSIC OG (SOLID OPAQUE, DYNAMIC ALBUM TINT)
+   ========================================================================== */
+body.theme-appleglass {
+  --font-main: var(--font-modern);
+  --bg-color: var(--color-dark);
+  --card-bg: var(--color-dark);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-muted: rgba(255, 255, 255, 0.45);
+  --accent-color: var(--color-primary);
+  --btn-hover: rgba(255, 255, 255, 0.12);
+  --border-radius-card: 16px;
+  --border-radius-art: 10px;
+}
+
+/* ==========================================================================
+   2. THEME: GAMEBOY CLASSIC
+   ========================================================================== */
+body.theme-gameboy {
+  --font-main: var(--font-pixel-ui);
+  --bg-color: #8bac0f;
+  --card-bg: #9bbc0f;
+  --text-primary: #0f380f;
+  --text-secondary: #306230;
+  --text-muted: #306230;
+  --accent-color: #0f380f;
+  --btn-hover: #306230;
+  --border-radius-card: 0px;
+  --border-radius-art: 0px;
+}
+
+/* ==========================================================================
+   3. THEME: PASTEL TAMAGOTCHI
+   ========================================================================== */
+body.theme-pastel {
+  --font-main: var(--font-pixel-ui);
+  --bg-color: #ffe5ec;
+  --card-bg: #ffc2d1;
+  --text-primary: #4a154b;
+  --text-secondary: #7b2cbf;
+  --text-muted: #9d4edd;
+  --accent-color: #ff4d6d;
+  --btn-hover: #ff758f;
+  --border-radius-card: 14px;
+  --border-radius-art: 8px;
+}
+
+/* ==========================================================================
+   4. THEME: CYBER LO-FI
+   ========================================================================== */
+body.theme-cyber {
+  --font-main: var(--font-pixel-ui);
+  --bg-color: #0d0221;
+  --card-bg: #19053b;
+  --text-primary: #00f0ff;
+  --text-secondary: #ff007f;
+  --text-muted: #9d4edd;
+  --accent-color: #ff007f;
+  --btn-hover: #ff007f;
+  --border-radius-card: 0px;
+  --border-radius-art: 0px;
+}
+
+/* ==========================================================================
+   5. THEME: WIN95 NOSTALGIA
+   ========================================================================== */
+body.theme-win95 {
+  --font-main: var(--font-pixel-ui);
+  --bg-color: #008080;
+  --card-bg: #c0c0c0;
+  --text-primary: #000000;
+  --text-secondary: #444444;
+  --text-muted: #666666;
+  --accent-color: #000080;
+  --btn-hover: #000080;
+  --border-radius-card: 0px;
+  --border-radius-art: 0px;
+}
+
+/* ==========================================================================
+   6. THEME: OLED CRT EMERALD
+   ========================================================================== */
+body.theme-oled {
+  --font-main: var(--font-pixel-ui);
+  --bg-color: #000000;
+  --card-bg: #071009;
+  --text-primary: #39ff14;
+  --text-secondary: #229910;
+  --text-muted: #145508;
+  --accent-color: #39ff14;
+  --btn-hover: #39ff14;
+  --border-radius-card: 0px;
+  --border-radius-art: 0px;
+}
+
+/* --- Base & Reset --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-main);
+  color: var(--text-primary);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all var(--transition-smooth);
+}
+
+/* --- CRT Scanlines --- */
+.crt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 999;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  opacity: 0.6;
+}
+
+.crt-overlay.disabled {
+  display: none;
+}
+
+/* ==========================================================================
+   MAIN MINIPLAYER CONTAINER (Solid 100% Opaque, Auto-Rescaled)
+   ========================================================================== */
+.miniplayer-container {
+  width: 100%;
+  height: 100%;
+  background: var(--card-bg);
+  border-radius: var(--border-radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none !important;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  z-index: 10;
+  transition: background 0.6s ease;
+}
+
+body.theme-gameboy .miniplayer-container,
+body.theme-win95 .miniplayer-container,
+body.theme-cyber .miniplayer-container,
+body.theme-oled .miniplayer-container {
+  border: 3px solid var(--accent-color);
+  box-shadow: none !important;
+}
+
+/* Dynamic Ambient Glow inside Card (Matches Album Palette) */
+.ambient-glow-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  filter: blur(50px) saturate(200%);
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+body.theme-appleglass .ambient-glow-layer {
+  opacity: 0.55;
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  animation: glowBreathe 14s infinite alternate ease-in-out;
+}
+
+.glow-top-left {
+  width: 70%;
+  height: 70%;
+  top: -15%;
+  left: -15%;
+  background: radial-gradient(circle, var(--color-primary), transparent 70%);
+}
+
+.glow-top-right {
+  width: 60%;
+  height: 60%;
+  top: 10%;
+  right: -15%;
+  background: radial-gradient(circle, var(--color-secondary), transparent 70%);
+  animation-duration: 18s;
+  animation-delay: -3s;
+}
+
+.glow-bottom-center {
+  width: 75%;
+  height: 75%;
+  bottom: -20%;
+  left: 15%;
+  background: radial-gradient(circle, var(--color-primary), transparent 70%);
+  animation-duration: 16s;
+  animation-delay: -6s;
+}
+
+@keyframes glowBreathe {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.18) translate(20px, 20px); }
+  100% { transform: scale(0.92) translate(-15px, 15px); }
+}
+
+/* Drag helpers */
+.drag-region {
+  -webkit-app-region: drag;
+  cursor: grab;
+}
+
+.drag-region:active {
+  cursor: grabbing;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* ==========================================================================
+   1. TOP APP HEADER: Large Crisp Album Thumb + Track Meta + Window Actions
+   ========================================================================== */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px 6px 16px;
+  gap: 12px;
+  z-index: 20;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Large Album Art Thumb (58px x 58px) */
+.art-thumb-box {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: var(--border-radius-art);
+  background: #111;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.3s ease, height 0.3s ease;
+}
+
+.visible-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#pixelCanvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  display: none;
+}
+
+#pixelCanvas.active-canvas {
+  display: block;
+}
+
+.visible-cover.hidden-cover {
+  display: none;
+}
+
+/* Meta stack beside album art */
+.header-track-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.header-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+}
+
+.explicit-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.header-subtitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Live Audio Quality Badge (Pure Indicator) */
+.audio-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: default;
+  pointer-events: none;
+  width: fit-content;
+}
+
+.badge-icon {
+  font-size: 11px;
+  color: var(--color-secondary);
+  font-weight: bold;
+}
+
+/* Header Window Actions */
+.header-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.win-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 5px;
+  cursor: pointer;
+  transition: all var(--transition-smooth);
+}
+
+.win-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.win-btn-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.win-btn-danger:hover {
+  color: #ff4d6d;
+}
+
+/* ==========================================================================
+   2. CENTER LYRICS STREAM AREA (Apple Music Synced Active-Only Three Dots)
+   ========================================================================== */
+.lyrics-view-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0px 20px;
+  position: relative;
+  z-index: 10;
+  width: 100%;
+}
+
+/* Collapsed Compact View Mode (Super Rapet & Clean, Height 156px) */
+body.lyrics-collapsed .app-header {
+  padding: 10px 14px 2px 14px;
+}
+
+body.lyrics-collapsed .art-thumb-box {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+}
+
+body.lyrics-collapsed .lyrics-view-area {
+  display: none !important;
+}
+
+body.lyrics-collapsed .app-controls-footer {
+  border-top: none;
+  background: transparent;
+  padding: 2px 14px 10px 14px;
+  gap: 6px;
+}
+
+.lyrics-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  scroll-behavior: smooth;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
+}
+
+.lyrics-scroll-container::-webkit-scrollbar {
+  width: 0px;
+  display: none;
+}
+
+.lyrics-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  gap: 8px;
+}
+
+.lyrics-placeholder .music-notes {
+  font-size: 26px;
+  opacity: 0.5;
+}
+
+.lyrics-placeholder .hint {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.lyrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 80px 0;
+  width: 100%;
+}
+
+/* Inactive Lyric Line (Apple Music Soft Faded Grey) */
+.lyric-line {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.36;
+  letter-spacing: -0.3px;
+  color: rgba(255, 255, 255, 0.42);
+  transition: var(--transition-spring);
+  cursor: pointer;
+  transform-origin: left center;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  padding-right: 6px;
+  max-width: 100%;
+}
+
+.lyric-line:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Active Lyric Line (Clean Crisp White, Smooth Wrapping) */
+.lyric-line.active {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: #ffffff;
+  transform: scale(1.015);
+}
+
+/* Three Dots: HIDDEN by default, ONLY shown when that instrumental gap is ACTIVE */
+.lyric-dots {
+  display: none !important;
+}
+
+.lyric-dots.active {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  cursor: pointer;
+  transform-origin: left center;
+  animation: dotsFadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dotsFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0px);
+  }
+}
+
+.lyric-dots .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: inline-block;
+  animation: dotPulse 1.4s infinite ease-in-out;
+}
+
+.lyric-dots.active .dot-1 {
+  animation-delay: 0s;
+}
+
+.lyric-dots.active .dot-2 {
+  animation-delay: 0.25s;
+}
+
+.lyric-dots.active .dot-3 {
+  animation-delay: 0.5s;
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+/* Retro themes typography override */
+body:not(.theme-appleglass) .lyric-line {
+  font-family: var(--font-pixel-body), var(--font-cjk);
+  font-size: 19px;
+  font-weight: normal;
+  color: var(--text-secondary);
+  opacity: 0.45;
+}
+
+body:not(.theme-appleglass) .lyric-line.active {
+  font-size: 22px;
+  font-weight: bold;
+  opacity: 1;
+  color: var(--text-primary);
+  border-left: 3px solid var(--accent-color);
+  padding-left: 6px;
+}
+
+/* ==========================================================================
+   3. BOTTOM APP CONTROLS FOOTER: Clean Unified White Apple Music Controls
+   ========================================================================== */
+.app-controls-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 14px 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 20;
+}
+
+/* Timeline Row (Scrubbable & Draggable) */
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.time-label {
+  min-width: 32px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-bar-container {
+  flex: 1;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 2px;
+  position: relative;
+  pointer-events: none;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: #ffffff;
+  border-radius: 2px;
+  transition: width 0.08s linear;
+}
+
+.progress-bar-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.progress-bar-container:hover .progress-bar-thumb,
+.progress-bar-container.dragging .progress-bar-thumb {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.progress-bar-container:hover .progress-bar-track,
+.progress-bar-container.dragging .progress-bar-track {
+  height: 5px;
+}
+
+/* Buttons Row - Clean Seamless Apple Music Style */
+.buttons-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-group-left,
+.btn-group-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 36px;
+}
+
+.btn-group-right {
+  justify-content: flex-end;
+}
+
+.btn-group-center {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: 6px;
+  transition: all var(--transition-smooth);
+}
+
+.action-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.08);
+}
+
+.action-btn.active {
+  color: #ffffff;
+}
+
+/* Pure Clean Unified Playback Controls (No Cyan Box) */
+.ctrl-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 50%;
+  transition: all var(--transition-smooth);
+}
+
+.ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  transform: scale(1.12);
+}
+
+.ctrl-btn-play {
+  width: 38px;
+  height: 38px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ==========================================================================
+   POP-UP SETTINGS & THEME SELECTION MENU
+   ========================================================================== */
+.theme-popup-menu {
+  position: absolute;
+  bottom: 52px;
+  right: 16px;
+  width: 270px;
+  background: #221d22;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: popupSlideUp 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes popupSlideUp {
+  0% { opacity: 0; transform: translateY(8px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0px) scale(1); }
+}
+
+.menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.menu-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+}
+
+.menu-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.menu-content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.section-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+/* Theme Grid */
+.theme-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.theme-option-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-smooth);
+}
+
+.theme-option-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.theme-option-btn.active {
+  background: #fa243c;
+  color: #fff;
+  border-color: #fa243c;
+}
+
+.theme-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-appleglass { background: #fa243c; }
+.dot-gameboy { background: #8bac0f; }
+.dot-pastel { background: #ff758f; }
+.dot-cyber { background: #ff007f; }
+.dot-win95 { background: #008080; }
+.dot-oled { background: #39ff14; }
+
+/* Toggle Options Row */
+.toggle-options-row {
+  display: flex;
+  gap: 6px;
+}
+
+.effect-toggle-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 6px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--transition-smooth);
+}
+
+.effect-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.effect-toggle-btn.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}

@@ -1,0 +1,23 @@
+{
+  "name": "apple-music-pixel-miniplayer",
+  "version": "1.0.0",
+  "description": "Aesthetic Retro Pixelated Miniplayer for Apple Music and Windows Media",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "keywords": [
+    "apple-music",
+    "miniplayer",
+    "pixel-art",
+    "retro",
+    "lyrics",
+    "aesthetic"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.3.1"
+  }
+}
