@@ -29,9 +29,20 @@ let isScrubbing = false;
 let scrubPosition = 0;
 let seekCooldownUntil = 0;
 
+// User Manual Scroll Guard for Lyrics
+let userScrollUntil = 0;
+
+// Fine-tuned Lyric Timing Offset (Seconds) - Apple Music Vocal Lead Anticipation
+const LYRIC_TIMING_OFFSET = 0.15;
+
 // Parsed Lyrics array [{ time: 12.5, text: "...", isDots: false, endTime: 16.0 }]
 let parsedLyrics = [];
 let activeLyricIndex = -1;
+
+// Cached Formatted Strings (Avoids unnecessary DOM text mutations in RAF loop)
+let lastCurrentTimeStr = '';
+let lastRemainingTimeStr = '';
+let lastPercent = -1;
 
 // DOM Elements
 const bodyEl = document.body;
@@ -58,6 +69,8 @@ const btnPin = document.getElementById('btnPin');
 const btnMin = document.getElementById('btnMin');
 const btnClose = document.getElementById('btnClose');
 
+const badgeRow = document.getElementById('badgeRow');
+const badgeIcon = document.getElementById('badgeIcon');
 const badgeLabel = document.getElementById('badgeLabel');
 const crtOverlay = document.getElementById('crtOverlay');
 
@@ -72,75 +85,125 @@ const themePopupMenu = document.getElementById('themePopupMenu');
 const btnCloseMenu = document.getElementById('btnCloseMenu');
 const menuTogglePixel = document.getElementById('menuTogglePixel');
 const menuToggleCrt = document.getElementById('menuToggleCrt');
+const menuToggleMesh = document.getElementById('menuToggleMesh');
+const volumeHudOverlay = document.getElementById('volumeHudOverlay');
+const volumeBarFill = document.getElementById('volumeBarFill');
+const volumePercent = document.getElementById('volumePercent');
+const volumeIcon = document.getElementById('volumeIcon');
+const ambientGlowLayer = document.getElementById('ambientGlowLayer');
+
+let currentVolume = 1.0;
+let volumeHudTimer = null;
+let isLiquidMeshEnabled = true;
 
 // --- Helper: Format seconds to M:SS ---
 function formatTime(seconds) {
   if (isNaN(seconds) || seconds < 0) return '0:00';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// --- True Dynamic Album Color Extraction (Ultra-Lightweight 16x16) ---
+// --- Reusable Offscreen Canvases (Memory & GC Optimization) ---
+let colorCanvas = null;
+let colorCtx = null;
+let ditherCanvas = null;
+let ditherCtx = null;
+
+function getColorCanvas() {
+  if (!colorCanvas) {
+    colorCanvas = document.createElement('canvas');
+    colorCanvas.width = 16;
+    colorCanvas.height = 16;
+    colorCtx = colorCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  return { canvas: colorCanvas, ctx: colorCtx };
+}
+
+function getDitherCanvas() {
+  if (!ditherCanvas) {
+    ditherCanvas = document.createElement('canvas');
+    ditherCanvas.width = 58;
+    ditherCanvas.height = 58;
+    ditherCtx = ditherCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  return { canvas: ditherCanvas, ctx: ditherCtx };
+}
+
+// --- True Dynamic 4-Tone Album Color Palette Extraction (Apple Music Liquid Mesh) ---
 function extractTrueAlbumColors(img) {
   try {
-    const c = document.createElement('canvas');
-    c.width = 16;
-    c.height = 16;
-    const cCtx = c.getContext('2d');
-    cCtx.drawImage(img, 0, 0, 16, 16);
-    const data = cCtx.getImageData(0, 0, 16, 16).data;
+    const { ctx: cCtx } = getColorCanvas();
+    cCtx.clearRect(0, 0, 32, 32);
+    cCtx.drawImage(img, 0, 0, 32, 32);
+    const data = cCtx.getImageData(0, 0, 32, 32).data;
 
-    let dominantR = 0, dominantG = 0, dominantB = 0, totalCount = 0;
-    let accentColor = null;
-    let maxSaturation = -1;
+    const samples = [];
+    let avgR = 0, avgG = 0, avgB = 0, validCount = 0;
 
     for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
       const delta = max - min;
-      const saturation = max === 0 ? 0 : delta / max;
-      const brightness = max / 255;
+      const sat = max === 0 ? 0 : delta / max;
+      const bri = max / 255;
 
-      if (brightness > 0.08 && brightness < 0.96) {
-        dominantR += r;
-        dominantG += g;
-        dominantB += b;
-        totalCount++;
-
-        if (saturation > maxSaturation && saturation > 0.22) {
-          maxSaturation = saturation;
-          accentColor = { r, g, b };
-        }
+      if (bri > 0.05 && bri < 0.96) {
+        samples.push({ r, g, b, sat, bri, score: sat * 1.8 + (0.5 - Math.abs(bri - 0.5)) });
+        avgR += r; avgG += g; avgB += b;
+        validCount++;
       }
     }
 
-    if (totalCount > 0) {
-      dominantR = Math.round(dominantR / totalCount);
-      dominantG = Math.round(dominantG / totalCount);
-      dominantB = Math.round(dominantB / totalCount);
+    if (validCount === 0) return;
 
-      const baseR = Math.max(14, Math.min(38, Math.round(dominantR * 0.26)));
-      const baseG = Math.max(14, Math.min(42, Math.round(dominantG * 0.26)));
-      const baseB = Math.max(16, Math.min(46, Math.round(dominantB * 0.26)));
-      const darkBg = `rgb(${baseR}, ${baseG}, ${baseB})`;
+    avgR = Math.round(avgR / validCount);
+    avgG = Math.round(avgG / validCount);
+    avgB = Math.round(avgB / validCount);
 
-      const primary = accentColor ? `rgb(${accentColor.r}, ${accentColor.g}, ${accentColor.b})` : `rgb(${dominantR}, ${dominantG}, ${dominantB})`;
-      const secondary = `rgb(${dominantR}, ${dominantG}, ${dominantB})`;
-      const glow = accentColor ? `rgba(${accentColor.r}, ${accentColor.g}, ${accentColor.b}, 0.38)` : `rgba(${dominantR}, ${dominantG}, ${dominantB}, 0.32)`;
+    // Sort by vibrance score to prioritize vivid accents
+    samples.sort((a, b) => b.score - a.score);
 
-      document.documentElement.style.setProperty('--color-primary', primary);
-      document.documentElement.style.setProperty('--color-secondary', secondary);
-      document.documentElement.style.setProperty('--color-dark', darkBg);
-      document.documentElement.style.setProperty('--color-glow', glow);
+    // Pick 4 distinct color poles from the cover art
+    const palette = [];
+    for (const s of samples) {
+      const isDistinct = palette.every(p => {
+        const dist = Math.sqrt((p.r - s.r)**2 + (p.g - s.g)**2 + (p.b - s.b)**2);
+        return dist > 60;
+      });
+      if (isDistinct) {
+        palette.push(s);
+        if (palette.length === 4) break;
+      }
     }
+
+    const c1 = palette[0] || { r: avgR, g: avgG, b: avgB };
+    const c2 = palette[1] || { r: Math.round(c1.r * 0.7), g: Math.round(c1.g * 1.1), b: Math.round(c1.b * 1.3) };
+    const c3 = palette[2] || { r: Math.round(c1.r * 1.2), g: Math.round(c1.g * 0.7), b: Math.round(c1.b * 0.9) };
+    const c4 = palette[3] || { r: Math.round(avgR * 0.6), g: Math.round(avgG * 0.6), b: Math.round(avgB * 0.6) };
+
+    const primary = `rgb(${c1.r}, ${c1.g}, ${c1.b})`;
+    const secondary = `rgb(${c2.r}, ${c2.g}, ${c2.b})`;
+    const accent1 = `rgb(${c3.r}, ${c3.g}, ${c3.b})`;
+    const accent2 = `rgb(${c4.r}, ${c4.g}, ${c4.b})`;
+
+    const baseR = Math.max(10, Math.min(30, Math.round(avgR * 0.2)));
+    const baseG = Math.max(10, Math.min(34, Math.round(avgG * 0.2)));
+    const baseB = Math.max(12, Math.min(40, Math.round(avgB * 0.2)));
+    const darkBg = `rgb(${baseR}, ${baseG}, ${baseB})`;
+    const glow = `rgba(${c1.r}, ${c1.g}, ${c1.b}, 0.45)`;
+
+    document.documentElement.style.setProperty('--color-primary', primary);
+    document.documentElement.style.setProperty('--color-secondary', secondary);
+    document.documentElement.style.setProperty('--color-accent1', accent1);
+    document.documentElement.style.setProperty('--color-accent2', accent2);
+    document.documentElement.style.setProperty('--color-dark', darkBg);
+    document.documentElement.style.setProperty('--color-glow', glow);
   } catch (e) {
     document.documentElement.style.setProperty('--color-primary', '#1d4e68');
     document.documentElement.style.setProperty('--color-secondary', '#cf353e');
+    document.documentElement.style.setProperty('--color-accent1', '#3a7d99');
+    document.documentElement.style.setProperty('--color-accent2', '#8c2536');
     document.documentElement.style.setProperty('--color-dark', '#121d24');
     document.documentElement.style.setProperty('--color-glow', 'rgba(29, 78, 104, 0.4)');
   }
@@ -183,12 +246,10 @@ function renderCoverArt() {
     }
 
     const targetSize = 58;
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = targetSize;
-    tempCanvas.height = targetSize;
-    const tempCtx = tempCanvas.getContext('2d');
+    const { canvas: tempCanvas, ctx: tempCtx } = getDitherCanvas();
 
     tempCtx.imageSmoothingEnabled = false;
+    tempCtx.clearRect(0, 0, targetSize, targetSize);
     tempCtx.drawImage(rawCoverImg, 0, 0, targetSize, targetSize);
 
     const imgData = tempCtx.getImageData(0, 0, targetSize, targetSize);
@@ -210,7 +271,6 @@ function renderCoverArt() {
     pixelCanvas.classList.remove('active-canvas');
   }
 
-  // Extract true album color palette
   if (rawCoverImg.src && rawCoverImg.naturalWidth > 0) {
     extractTrueAlbumColors(rawCoverImg);
   }
@@ -218,23 +278,38 @@ function renderCoverArt() {
 
 rawCoverImg.onload = () => renderCoverArt();
 
-// --- LRC Synced Lyrics Engine with Apple Music Synced Three-Dots ---
+// --- Robust LRC Synced Lyrics Engine with Apple Music Synced Three-Dots ---
 function parseLRC(lrcText) {
   if (!lrcText) return [];
-  const rawLines = lrcText.split('\n');
+  const rawLines = lrcText.split(/\r?\n/);
   const parsed = [];
-  const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+  const tagRegex = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
 
   for (const line of rawLines) {
-    const match = timeRegex.exec(line);
-    if (match) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    // Ignore header tags like [ar: ...], [ti: ...], [al: ...]
+    if (/^\[(ti|ar|al|by|offset|length|re|ve):/i.test(trimmed)) continue;
+
+    let match;
+    const timestamps = [];
+    tagRegex.lastIndex = 0;
+    
+    while ((match = tagRegex.exec(trimmed)) !== null) {
       const min = parseInt(match[1], 10);
       const sec = parseInt(match[2], 10);
-      const ms = parseFloat('0.' + match[3]);
-      const totalSeconds = min * 60 + sec + ms;
-      const text = line.replace(timeRegex, '').trim();
-      if (text) {
-        parsed.push({ time: totalSeconds, text, isDots: false });
+      let ms = 0;
+      if (match[3]) {
+        ms = parseFloat('0.' + match[3]);
+      }
+      timestamps.push(min * 60 + sec + ms);
+    }
+
+    const text = trimmed.replace(tagRegex, '').trim();
+    if (timestamps.length > 0 && text) {
+      for (const t of timestamps) {
+        parsed.push({ time: t, text, isDots: false });
       }
     }
   }
@@ -244,25 +319,28 @@ function parseLRC(lrcText) {
 
   const resultWithDots = [];
 
-  // 1. Intro Instrumental Gap (if first vocal starts > 3.2s)
-  if (parsed[0].time > 3.2) {
+  // 1. Intro Instrumental Gap (only if opening intro is substantial > 6.0s)
+  if (parsed[0].time > 6.0) {
+    const introStart = Math.max(0, parsed[0].time - 3.5);
     resultWithDots.push({
-      time: 0.5,
+      time: introStart,
       endTime: parsed[0].time,
       text: '•••',
       isDots: true
     });
   }
 
-  // 2. Interlude Gaps between lines
+  // 2. Interlude Gaps between lines (only for true instrumental breaks / solos >= 8.5s)
   for (let i = 0; i < parsed.length; i++) {
     resultWithDots.push(parsed[i]);
 
     if (i < parsed.length - 1) {
       const gap = parsed[i + 1].time - parsed[i].time;
-      if (gap >= 6.0) {
+      if (gap >= 8.5) {
+        // Capped countdown: only activate 3.5 seconds before the next vocal begins
+        const dotsStart = parsed[i + 1].time - 3.5;
         resultWithDots.push({
-          time: parsed[i].time + 2.4,
+          time: dotsStart,
           endTime: parsed[i + 1].time,
           text: '•••',
           isDots: true
@@ -287,6 +365,8 @@ function renderLyricsList() {
   lyricsPlaceholder.style.display = 'none';
   lyricsList.style.display = 'flex';
 
+  const frag = document.createDocumentFragment();
+
   parsedLyrics.forEach((lyric, index) => {
     const lineEl = document.createElement('div');
     lineEl.dataset.index = index;
@@ -299,31 +379,49 @@ function renderLyricsList() {
       lineEl.textContent = lyric.text;
     }
 
-    // Click lyric line to instantly jump/seek Apple Music to that exact timestamp!
+    // Click lyric line to focus/scroll to that line and send seek
     lineEl.addEventListener('click', () => {
-      seekCooldownUntil = performance.now() + 1400;
-      window.miniplayerAPI.sendMediaCommand('seek', lyric.time);
-      currentPosition = lyric.time;
-      lastTickTime = performance.now();
-      updateProgressBar();
+      userScrollUntil = Date.now() + 3500;
+      const containerHeight = lyricsContainer.clientHeight;
+      const targetTop = lineEl.offsetTop - (containerHeight / 2) + (lineEl.clientHeight / 2);
+      lyricsContainer.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: 'smooth'
+      });
+      if (lyric.time >= 0) {
+        window.miniplayerAPI.sendMediaCommand('seek', lyric.time);
+      }
     });
 
-    lyricsList.appendChild(lineEl);
+    frag.appendChild(lineEl);
   });
+
+  lyricsList.appendChild(frag);
 }
 
-function updateActiveLyric(time) {
+// User scroll detection to avoid fighting manual scroll
+lyricsContainer.addEventListener('wheel', () => {
+  userScrollUntil = Date.now() + 2500;
+}, { passive: true });
+
+lyricsContainer.addEventListener('touchstart', () => {
+  userScrollUntil = Date.now() + 2500;
+}, { passive: true });
+
+function updateActiveLyric(rawTime) {
   if (parsedLyrics.length === 0) return;
+
+  const time = rawTime + LYRIC_TIMING_OFFSET;
 
   let activeIdx = -1;
   for (let i = 0; i < parsedLyrics.length; i++) {
     const lyric = parsedLyrics[i];
-    const nextTime = (i < parsedLyrics.length - 1) ? parsedLyrics[i + 1].time : (lyric.endTime || lyric.time + 999);
+    const nextTime = (i < parsedLyrics.length - 1) ? parsedLyrics[i + 1].time : (lyric.endTime || lyric.time + 9999);
 
-    if (time >= lyric.time - 0.08 && time < nextTime) {
+    if (time >= lyric.time && time < nextTime) {
       activeIdx = i;
       break;
-    } else if (time >= lyric.time - 0.08) {
+    } else if (time >= lyric.time) {
       activeIdx = i;
     }
   }
@@ -338,13 +436,36 @@ function updateActiveLyric(time) {
       const activeEl = lyricsList.querySelector(`.lyric-line[data-index="${activeIdx}"]`);
       if (activeEl) {
         activeEl.classList.add('active');
-        activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Smooth auto-scroll only if user is not actively scrolling manually
+        if (Date.now() > userScrollUntil) {
+          const containerHeight = lyricsContainer.clientHeight;
+          const targetTop = activeEl.offsetTop - (containerHeight / 2) + (activeEl.clientHeight / 2);
+          lyricsContainer.scrollTo({
+            top: Math.max(0, targetTop),
+            behavior: 'smooth'
+          });
+        }
+      }
+    }
+  }
+
+  // Real-time 3-dot countdown sync leading into vocals
+  if (activeLyricIndex >= 0 && parsedLyrics[activeLyricIndex] && parsedLyrics[activeLyricIndex].isDots) {
+    const activeEl = lyricsList.querySelector(`.lyric-line[data-index="${activeLyricIndex}"]`);
+    if (activeEl) {
+      const dots = activeEl.querySelectorAll('.dot');
+      if (dots.length === 3) {
+        const remaining = parsedLyrics[activeLyricIndex].endTime - time;
+        dots[0].classList.toggle('filled', remaining <= 3.05);
+        dots[1].classList.toggle('filled', remaining <= 2.05);
+        dots[2].classList.toggle('filled', remaining <= 1.05);
       }
     }
   }
 }
 
-// --- SMTC Media Update Receiver ---
+// --- SMTC Media Update Receiver with Jitter Filter ---
 window.miniplayerAPI.onMediaUpdate((data) => {
   if (!data) return;
 
@@ -358,11 +479,20 @@ window.miniplayerAPI.onMediaUpdate((data) => {
     const subtitle = data.album ? `${data.artist || ''} — ${data.album}` : (data.artist || 'Apple Music');
     trackSubtitleEl.textContent = subtitle;
     
-    // Fetch live audio quality
+    // Fetch live audio quality (1:1 Apple Music badge display)
     window.miniplayerAPI.fetchQuality(data.title, data.artist)
       .then((q) => {
-        if (q && q.quality) {
-          badgeLabel.textContent = q.quality;
+        if (q) {
+          const isLossless = q.isLossless !== false;
+          if (badgeRow) {
+            badgeRow.style.display = isLossless ? 'inline-flex' : 'none';
+          }
+          if (badgeLabel) {
+            badgeLabel.textContent = q.quality || 'Lossless';
+          }
+          if (badgeIcon) {
+            badgeIcon.textContent = q.quality === 'Dolby Atmos' ? '∿' : '≋';
+          }
           explicitBadge.style.display = q.explicit ? 'inline-block' : 'none';
         }
       })
@@ -375,7 +505,10 @@ window.miniplayerAPI.onMediaUpdate((data) => {
           parsedLyrics = parseLRC(res.syncedLyrics);
           renderLyricsList();
         } else if (res && res.plainLyrics) {
-          parsedLyrics = res.plainLyrics.split('\n').filter(t => t.trim()).map(t => ({ time: -1, text: t.trim(), isDots: false }));
+          parsedLyrics = res.plainLyrics
+            .split(/\r?\n/)
+            .filter(t => t.trim())
+            .map(t => ({ time: -1, text: t.trim(), isDots: false }));
           renderLyricsList();
         } else {
           parsedLyrics = [];
@@ -397,13 +530,43 @@ window.miniplayerAPI.onMediaUpdate((data) => {
     drawDefaultPixelArt();
   }
 
-  // Playback Status & Timeline
+  // Playback Status & Timeline Synchronization with Jitter Filter
+  const prevPlaying = isPlaying;
   isPlaying = data.status === 'Playing';
-  if (!isScrubbing && performance.now() > seekCooldownUntil) {
-    currentPosition = data.position || 0;
-  }
   currentDuration = data.duration || 0;
-  lastTickTime = performance.now();
+
+  const now = performance.now();
+
+  if (!isScrubbing && now > seekCooldownUntil) {
+    if (isNewTrack || !prevPlaying && isPlaying || prevPlaying && !isPlaying) {
+      // Direct sync on state transition
+      currentPosition = data.position || 0;
+      lastTickTime = now;
+    } else if (isPlaying) {
+      const elapsed = (now - lastTickTime) / 1000;
+      const currentEstimated = currentPosition + elapsed;
+      const reportedPos = data.position || 0;
+      const diff = reportedPos - currentEstimated;
+
+      // If large jump (seek or track jump), sync instantly
+      if (Math.abs(diff) > 1.2) {
+        currentPosition = reportedPos;
+        lastTickTime = now;
+      } else {
+        // Continuous soft clock lock: pull estimated position toward reported position
+        currentPosition = currentEstimated + (diff * 0.35);
+        lastTickTime = now;
+      }
+    } else {
+      currentPosition = data.position || 0;
+      lastTickTime = now;
+    }
+  }
+
+  // Volume sync from SMTC
+  if (typeof data.volume === 'number') {
+    currentVolume = data.volume;
+  }
 
   if (isPlaying) {
     bodyEl.classList.add('playing');
@@ -424,23 +587,37 @@ window.miniplayerAPI.onMediaUpdate((data) => {
   updateProgressBar();
 });
 
-// --- Butter-Smooth 60FPS Animation Loop ---
+// --- Butter-Smooth 60FPS Animation Loop with DOM Throttling ---
 function updateProgressBar() {
   let displayPos = currentPosition;
   if (isScrubbing) {
     displayPos = scrubPosition;
   } else if (isPlaying) {
     const elapsed = (performance.now() - lastTickTime) / 1000;
-    displayPos = Math.min(currentPosition + elapsed, currentDuration || 9999);
+    displayPos = Math.min(currentPosition + elapsed, currentDuration > 0 ? currentDuration : 99999);
   }
 
   const remaining = Math.max(0, currentDuration - displayPos);
-  timeCurrentEl.textContent = formatTime(displayPos);
-  timeRemainingEl.textContent = `-${formatTime(remaining)}`;
+  
+  // Throttle DOM text mutations (only when the formatted second string changes)
+  const curStr = formatTime(displayPos);
+  if (curStr !== lastCurrentTimeStr) {
+    lastCurrentTimeStr = curStr;
+    timeCurrentEl.textContent = curStr;
+  }
+
+  const remStr = `-${formatTime(remaining)}`;
+  if (remStr !== lastRemainingTimeStr) {
+    lastRemainingTimeStr = remStr;
+    timeRemainingEl.textContent = remStr;
+  }
 
   const percent = currentDuration > 0 ? (displayPos / currentDuration) * 100 : 0;
-  progressBarFill.style.width = `${percent}%`;
-  progressBarThumb.style.left = `${percent}%`;
+  if (Math.abs(percent - lastPercent) > 0.01) {
+    lastPercent = percent;
+    progressBarFill.style.width = `${percent}%`;
+    progressBarThumb.style.left = `${percent}%`;
+  }
 
   if (!isScrubbing) {
     updateActiveLyric(displayPos);
@@ -572,6 +749,57 @@ document.querySelectorAll('.theme-option-btn').forEach(btn => {
   });
 });
 
+// --- Apple Music Volume HUD & Scroll-to-Volume Engine ---
+function showVolumeHUD(level) {
+  if (!volumeHudOverlay) return;
+  const pct = Math.max(0, Math.min(100, Math.round(level * 100)));
+  volumeBarFill.style.width = `${pct}%`;
+  volumePercent.textContent = `${pct}%`;
+
+  if (pct === 0) {
+    volumeIcon.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>`;
+  } else if (pct < 35) {
+    volumeIcon.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 9v6h4l5 5V4L11 9H7z"/></svg>`;
+  } else if (pct < 70) {
+    volumeIcon.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg>`;
+  } else {
+    volumeIcon.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
+  }
+
+  volumeHudOverlay.classList.remove('hidden');
+  if (volumeHudTimer) clearTimeout(volumeHudTimer);
+  volumeHudTimer = setTimeout(() => {
+    volumeHudOverlay.classList.add('hidden');
+  }, 1400);
+}
+
+// Scroll Wheel on miniplayer card to adjust Apple Music volume
+miniplayerContainer.addEventListener('wheel', (e) => {
+  const isOverLyrics = e.target.closest('#lyricsContainer');
+  // If hovering directly over lyrics and not holding Shift, let lyric scroll proceed
+  if (isOverLyrics && !e.shiftKey) {
+    return;
+  }
+
+  e.preventDefault();
+  const delta = e.deltaY < 0 ? 0.05 : -0.05;
+  currentVolume = Math.max(0, Math.min(1, currentVolume + delta));
+  showVolumeHUD(currentVolume);
+  window.miniplayerAPI.sendMediaCommand('change-volume', delta);
+}, { passive: false });
+
+// Liquid Mesh Aura Toggle
+if (menuToggleMesh) {
+  menuToggleMesh.addEventListener('click', () => {
+    isLiquidMeshEnabled = !isLiquidMeshEnabled;
+    menuToggleMesh.classList.toggle('active', isLiquidMeshEnabled);
+    menuToggleMesh.textContent = isLiquidMeshEnabled ? '🌊 Fluid Aura: ON' : '🌊 Fluid Aura: OFF';
+    if (ambientGlowLayer) {
+      ambientGlowLayer.classList.toggle('disabled', !isLiquidMeshEnabled);
+    }
+  });
+}
+
 // 8-Bit Pixel Dither Toggle
 menuTogglePixel.addEventListener('click', () => {
   is8BitDither = !is8BitDither;
@@ -589,6 +817,57 @@ menuToggleCrt.addEventListener('click', () => {
 });
 
 // Pin / Always-On-Top
+const btnFullscreen = document.getElementById('btnFullscreen');
+const btnExitFullscreen = document.getElementById('btnExitFullscreen');
+const headerPlayerCard = document.getElementById('headerPlayerCard');
+let isFullscreen = false;
+
+function setFullscreenState(fs) {
+  isFullscreen = fs;
+  bodyEl.classList.toggle('fullscreen-mode', fs);
+  if (btnExitFullscreen) {
+    btnExitFullscreen.classList.toggle('hidden', !fs);
+  }
+  if (btnFullscreen) {
+    btnFullscreen.title = fs ? 'Exit Fullscreen (Esc / F11)' : 'Fullscreen (F / F11)';
+    btnFullscreen.textContent = fs ? '↙' : '⛶';
+  }
+  // Re-scroll active lyrics into center
+  if (activeLyricIndex >= 0) {
+    setTimeout(() => {
+      scrollToActiveLyric(activeLyricIndex, false);
+    }, 150);
+  }
+}
+
+window.miniplayerAPI.onFullscreenChange((fs) => {
+  setFullscreenState(fs);
+});
+
+if (btnFullscreen) {
+  btnFullscreen.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const fs = await window.miniplayerAPI.toggleFullscreen();
+    setFullscreenState(fs);
+  });
+}
+
+if (btnExitFullscreen) {
+  btnExitFullscreen.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const fs = await window.miniplayerAPI.toggleFullscreen();
+    setFullscreenState(fs);
+  });
+}
+
+if (headerPlayerCard) {
+  headerPlayerCard.addEventListener('dblclick', (e) => {
+    if (!e.target.closest('button') && !e.target.closest('.no-drag')) {
+      window.miniplayerAPI.toggleFullscreen();
+    }
+  });
+}
+
 btnPin.addEventListener('click', async () => {
   isPinned = await window.miniplayerAPI.toggleAlwaysOnTop();
   btnPin.classList.toggle('win-btn-danger', !isPinned);
@@ -618,9 +897,17 @@ window.addEventListener('keydown', (e) => {
     applyTheme(nextIdx);
   } else if (e.key === 'm' || e.key === 'M') {
     themePopupMenu.classList.toggle('hidden');
+  } else if (e.key === 'f' || e.key === 'F' || e.key === 'F11') {
+    e.preventDefault();
+    window.miniplayerAPI.toggleFullscreen();
+  } else if (e.key === 'Escape' && isFullscreen) {
+    e.preventDefault();
+    window.miniplayerAPI.toggleFullscreen();
   }
 });
 
 // Initialize with Default Apple Music OG theme
 applyTheme(0);
 drawDefaultPixelArt();
+
+

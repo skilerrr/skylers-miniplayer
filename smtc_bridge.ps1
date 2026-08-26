@@ -1,4 +1,4 @@
-# SMTC Bridge for Apple Music Aesthetic Miniplayer - Ultra-Low Latency Engine
+# SMTC Bridge for Apple Music Aesthetic Miniplayer - Ultra-Low Latency & High Efficiency
 Add-Type -AssemblyName 'System.Runtime.WindowsRuntime'
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media, ContentType = WindowsRuntime] | Out-Null
 [Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
@@ -9,25 +9,36 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $coverFilePath = Join-Path $scriptDir "cover_temp.jpg"
 
-function AwaitTask($asyncOp, $type) {
-    if (-not $asyncOp) { return $null }
-    $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | 
-        Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | 
-        Select-Object -First 1
-    if (-not $asTask) { return $null }
-    $task = $asTask.MakeGenericMethod($type).Invoke($null, @($asyncOp))
-    $task.Wait(1000) | Out-Null
-    return $task.Result
+# Compile AppVolumeHelper for independent Apple Music volume control
+$volumeHelperPath = Join-Path $scriptDir "AppVolumeHelper.cs"
+if (Test-Path $volumeHelperPath) {
+    try {
+        Add-Type -Path $volumeHelperPath -ErrorAction SilentlyContinue
+    } catch {}
 }
 
-function AwaitActionTask($asyncOp) {
+# Cache AsTask Reflection Methods once at startup (prevents heavy reflection in loops)
+$extType = [System.WindowsRuntimeSystemExtensions]
+$genericAsTask = $extType.GetMethods() | 
+    Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | 
+    Select-Object -First 1
+
+$asStreamMethod = [System.IO.WindowsRuntimeStreamExtensions].GetMethods() | 
+    Where-Object { $_.Name -eq 'AsStreamForRead' } | Select-Object -First 1
+
+# Method cache for generic types
+$asTaskCache = @{}
+
+function AwaitTaskFast($asyncOp, [Type]$type) {
     if (-not $asyncOp) { return $null }
-    $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | 
-        Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | 
-        Select-Object -First 1
-    if (-not $asTask) { return $null }
-    $task = $asTask.MakeGenericMethod([System.Boolean]).Invoke($null, @($asyncOp))
-    $task.Wait(1000) | Out-Null
+    $typeName = $type.FullName
+    $method = $asTaskCache[$typeName]
+    if (-not $method) {
+        $method = $genericAsTask.MakeGenericMethod($type)
+        $asTaskCache[$typeName] = $method
+    }
+    $task = $method.Invoke($null, @($asyncOp))
+    $task.Wait(1200) | Out-Null
     return $task.Result
 }
 
@@ -51,8 +62,13 @@ $null = $psStdin.AddScript({
     } catch {}
 }).AddArgument($cmdQueue).BeginInvoke()
 
+$mgrType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]
+$mediaPropType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]
+$streamType = [Windows.Storage.Streams.IRandomAccessStreamWithContentType]
+$boolType = [System.Boolean]
+
 $managerOp = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()
-$manager = AwaitTask $managerOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+$manager = AwaitTaskFast $managerOp $mgrType
 
 if (-not $manager) {
     $errObj = @{ type = "error"; message = "Failed to initialize Windows SMTC Manager" }
@@ -77,6 +93,7 @@ function GetActiveMediaSession($mgr) {
 
 $lastTrackKey = ""
 $lastCoverPath = ""
+$lastEmittedState = ""
 
 while ($true) {
     # 1. Process queued commands instantly
@@ -89,26 +106,44 @@ while ($true) {
             if ($session) {
                 switch ($cmd) {
                     "PLAY" {
-                        $null = AwaitActionTask ($session.TryPlayAsync())
+                        $null = AwaitTaskFast ($session.TryPlayAsync()) $boolType
                     }
                     "PAUSE" {
-                        $null = AwaitActionTask ($session.TryPauseAsync())
+                        $null = AwaitTaskFast ($session.TryPauseAsync()) $boolType
                     }
                     "TOGGLE" {
-                        $null = AwaitActionTask ($session.TryTogglePlayPauseAsync())
+                        $null = AwaitTaskFast ($session.TryTogglePlayPauseAsync()) $boolType
                     }
                     "NEXT" {
-                        $null = AwaitActionTask ($session.TrySkipNextAsync())
+                        $null = AwaitTaskFast ($session.TrySkipNextAsync()) $boolType
                     }
                     "PREV" {
-                        $null = AwaitActionTask ($session.TrySkipPreviousAsync())
+                        $null = AwaitTaskFast ($session.TrySkipPreviousAsync()) $boolType
                     }
                     "SEEK" {
                         if ($cmdParts.Length -gt 1) {
                             try {
                                 $sec = [double]::Parse($cmdParts[1], [System.Globalization.CultureInfo]::InvariantCulture)
                                 $ticks = [long]($sec * 10000000)
-                                $null = AwaitActionTask ($session.TryChangePlaybackPositionAsync($ticks))
+                                $null = AwaitTaskFast ($session.TryChangePlaybackPositionAsync($ticks)) $boolType
+                            } catch {}
+                        }
+                    }
+                    "SET_VOLUME" {
+                        if ($cmdParts.Length -gt 1) {
+                            try {
+                                $v = [float]::Parse($cmdParts[1], [System.Globalization.CultureInfo]::InvariantCulture)
+                                [AudioMixer.AppVolumeController]::SetVolume("AppleMusic", $v) | Out-Null
+                            } catch {}
+                        }
+                    }
+                    "CHANGE_VOLUME" {
+                        if ($cmdParts.Length -gt 1) {
+                            try {
+                                $delta = [float]::Parse($cmdParts[1], [System.Globalization.CultureInfo]::InvariantCulture)
+                                $cur = [AudioMixer.AppVolumeController]::GetVolume("AppleMusic")
+                                $target = [Math]::Max(0.0, [Math]::Min(1.0, $cur + $delta))
+                                [AudioMixer.AppVolumeController]::SetVolume("AppleMusic", $target) | Out-Null
                             } catch {}
                         }
                     }
@@ -117,13 +152,14 @@ while ($true) {
         }
     }
 
-    # 2. Query SMTC Media State (Low latency)
+    # 2. Query SMTC Media State with fast execution
+    $currentStatus = "Stopped"
     try {
         $session = GetActiveMediaSession $manager
 
         if ($session) {
             $mediaPropOp = $session.TryGetMediaPropertiesAsync()
-            $props = AwaitTask $mediaPropOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+            $props = AwaitTaskFast $mediaPropOp $mediaPropType
             
             $playbackInfo = $session.GetPlaybackInfo()
             $timeline = $session.GetTimelineProperties()
@@ -142,9 +178,25 @@ while ($true) {
                 $album = $Matches[2].Trim()
             }
 
-            $status = if ($playbackInfo) { $playbackInfo.PlaybackStatus.ToString() } else { "Closed" }
-            $pos = if ($timeline) { [Math]::Round($timeline.Position.TotalSeconds, 2) } else { 0 }
-            $dur = if ($timeline) { [Math]::Round($timeline.EndTime.TotalSeconds, 2) } else { 0 }
+            $currentStatus = if ($playbackInfo) { $playbackInfo.PlaybackStatus.ToString() } else { "Closed" }
+            
+            $pos = 0
+            $dur = 0
+            if ($timeline) {
+                $basePos = $timeline.Position.TotalSeconds
+                if ($currentStatus -eq "Playing" -and $timeline.LastUpdatedTime) {
+                    try {
+                        $elapsedSinceUpdate = ([DateTimeOffset]::UtcNow - $timeline.LastUpdatedTime).TotalSeconds
+                        if ($elapsedSinceUpdate -gt 0 -and $elapsedSinceUpdate -lt 15) {
+                            $basePos += $elapsedSinceUpdate
+                        }
+                    } catch {}
+                    # Live DAC / SMTC Playhead Calibration Offset (+0.95s)
+                    $basePos += 0.95
+                }
+                $pos = [Math]::Round($basePos, 2)
+                $dur = [Math]::Round($timeline.EndTime.TotalSeconds, 2)
+            }
             
             $trackKey = "$title|$artist|$album|$dur"
             $coverUpdated = $false
@@ -156,14 +208,13 @@ while ($true) {
                 if ($props -and $props.Thumbnail) {
                     try {
                         $streamOp = $props.Thumbnail.OpenReadAsync()
-                        $stream = AwaitTask $streamOp ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-                        if ($stream) {
-                            $asStreamMethod = [System.IO.WindowsRuntimeStreamExtensions].GetMethods() | 
-                                Where-Object { $_.Name -eq 'AsStreamForRead' } | Select-Object -First 1
+                        $stream = AwaitTaskFast $streamOp $streamType
+                        if ($stream -and $asStreamMethod) {
                             $netStream = $asStreamMethod.Invoke($null, @($stream))
                             $ms = New-Object System.IO.MemoryStream
                             $netStream.CopyTo($ms)
                             $bytes = $ms.ToArray()
+                            $ms.Dispose()
                             if ($bytes.Length -gt 0) {
                                 [System.IO.File]::WriteAllBytes($coverFilePath, $bytes)
                                 $coverUrl = "file:///" + ($coverFilePath -replace '\\', '/') + "?v=" + [DateTime]::UtcNow.Ticks
@@ -176,17 +227,23 @@ while ($true) {
                 $coverUpdated = $true
             }
 
-            # Emit lightweight state update JSON
+            $appVolume = 1.0
+            try {
+                $appVolume = [AudioMixer.AppVolumeController]::GetVolume("AppleMusic")
+            } catch {}
+
+            # Emit state update JSON
             $outObj = @{
                 type = "media_update"
                 title = $title
                 artist = $artist
                 album = $album
-                status = $status
+                status = $currentStatus
                 position = $pos
                 duration = $dur
                 cover = $coverUrl
                 trackChanged = $coverUpdated
+                volume = [Math]::Round($appVolume, 2)
             }
 
             Write-Output (ConvertTo-Json $outObj -Compress)
@@ -201,10 +258,16 @@ while ($true) {
                 duration = 0
                 cover = ""
                 trackChanged = $false
+                volume = 1.0
             }
             Write-Output (ConvertTo-Json $outObj -Compress)
         }
     } catch {}
 
-    Start-Sleep -Milliseconds 120
+    # Adaptive sleep: 150ms when playing for tight SMTC sync, 600ms when paused/stopped
+    if ($currentStatus -eq "Playing") {
+        Start-Sleep -Milliseconds 150
+    } else {
+        Start-Sleep -Milliseconds 600
+    }
 }

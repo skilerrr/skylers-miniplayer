@@ -16,13 +16,19 @@
 
   <!-- Main Container Card (Solid 100% Opaque, Edge-to-Edge Rounded, No Outer Drop Shadow) -->
   <div class="miniplayer-container" id="miniplayerContainer">
-    <!-- Dynamic Ambient Aura Glow (Contained inside solid container) -->
+    <!-- Apple Music iOS 17 Animated Liquid Mesh Gradient Aura -->
     <div class="ambient-glow-layer" id="ambientGlowLayer">
-      <div class="glow-orb glow-top-left" id="glowOrb1"></div>
-      <div class="glow-orb glow-top-right" id="glowOrb2"></div>
-      <div class="glow-orb glow-bottom-center" id="glowOrb3"></div>
+      <div class="mesh-fluid-blob mesh-blob-1" id="glowOrb1"></div>
+      <div class="mesh-fluid-blob mesh-blob-2" id="glowOrb2"></div>
+      <div class="mesh-fluid-blob mesh-blob-3" id="glowOrb3"></div>
+      <div class="mesh-fluid-blob mesh-blob-4" id="glowOrb4"></div>
     </div>
     
+    <!-- Floating Exit Fullscreen Control (Apple Music Style) -->
+    <button class="fullscreen-exit-btn hidden no-drag" id="btnExitFullscreen" title="Exit Fullscreen (Esc / F11)">
+      <span>↙</span> Exit Fullscreen
+    </button>
+
     <!-- 1. TOP HEADER: Track Info + Window Controls -->
     <header class="app-header drag-region">
       <div class="header-left">
@@ -40,23 +46,24 @@
           </div>
           <h2 class="header-subtitle" id="trackSubtitle">Apple Music</h2>
           
-          <!-- Live Audio Quality Indicator Badge (Pure Display, Non-Clickable) -->
+          <!-- Live Audio Quality Indicator Badge (Matches Apple Music Player Bar) -->
           <div class="audio-badge-row" id="badgeRow">
-            <span class="badge-icon">≋</span>
-            <span class="badge-label" id="badgeLabel">Lossless • 16-bit 44.1 kHz ALAC</span>
+            <span class="badge-icon" id="badgeIcon">≋</span>
+            <span class="badge-label" id="badgeLabel">Lossless</span>
           </div>
         </div>
       </div>
 
       <!-- Window Action Controls -->
       <div class="header-actions no-drag">
+        <button class="win-btn win-btn-icon" id="btnFullscreen" title="Fullscreen (F / F11)">⛶</button>
         <button class="win-btn win-btn-icon" id="btnPin" title="Always on Top">📌</button>
         <button class="win-btn win-btn-icon" id="btnMin" title="Minimize">─</button>
         <button class="win-btn win-btn-icon win-btn-danger" id="btnClose" title="Close">✕</button>
       </div>
     </header>
 
-    <!-- 2. CENTER: Full-Height Synced Karaoke Lyrics (Generous Padding, No Text Clipping) -->
+    <!-- 2. CENTER: Full-Height Synced Karaoke Lyrics -->
     <main class="lyrics-view-area" id="lyricsViewArea">
       <div class="lyrics-scroll-container" id="lyricsContainer">
         <div class="lyrics-placeholder" id="lyricsPlaceholder">
@@ -73,7 +80,7 @@
       <!-- Draggable / Scrubbable Seekbar Row -->
       <div class="timeline-row">
         <span class="time-label" id="timeCurrent">0:00</span>
-        <div class="progress-bar-container" id="progressBarContainer" title="Drag to seek">
+        <div class="progress-bar-container" id="progressBarContainer" title="Timeline progress">
           <div class="progress-bar-track">
             <div class="progress-bar-fill" id="progressBarFill"></div>
             <div class="progress-bar-thumb" id="progressBarThumb"></div>
@@ -114,6 +121,21 @@
         </div>
       </div>
     </footer>
+
+    <!-- 4. Apple Music Volume HUD Overlay (Auto-Fading on Scroll) -->
+    <div class="volume-hud-overlay hidden" id="volumeHudOverlay">
+      <div class="volume-hud-card">
+        <span class="volume-icon" id="volumeIcon">
+          <svg class="vol-svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </span>
+        <div class="volume-bar-track">
+          <div class="volume-bar-fill" id="volumeBarFill"></div>
+        </div>
+        <span class="volume-percent" id="volumePercent">100%</span>
+      </div>
+    </div>
 
     <!-- Pop-up Settings & Theme Selection Menu -->
     <div class="theme-popup-menu hidden" id="themePopupMenu">
@@ -156,9 +178,12 @@
 
         <!-- 2. Visual Effects Toggles -->
         <div class="menu-section">
-          <div class="section-label">RETRO EFFECTS</div>
+          <div class="section-label">VISUAL EFFECTS</div>
           <div class="toggle-options-row">
+            <button class="effect-toggle-btn active" id="menuToggleMesh">🌊 Fluid Aura: ON</button>
             <button class="effect-toggle-btn" id="menuTogglePixel">👾 8-Bit Art: OFF</button>
+          </div>
+          <div class="toggle-options-row" style="margin-top: 6px;">
             <button class="effect-toggle-btn" id="menuToggleCrt">⚡ CRT FX: OFF</button>
           </div>
         </div>
@@ -170,3 +195,4 @@
   <script src="renderer.js"></script>
 </body>
 </html>
+
