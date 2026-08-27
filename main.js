@@ -44,21 +44,6 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
-  mainWindow.on('enter-full-screen', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('fullscreen-change', true);
-    }
-  });
-
-  mainWindow.on('leave-full-screen', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (preFullscreenBounds) {
-        mainWindow.setBounds(preFullscreenBounds);
-      }
-      mainWindow.webContents.send('fullscreen-change', false);
-    }
-  });
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -128,14 +113,12 @@ function cleanTrackName(track) {
   if (!track) return '';
   return track
     .replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'")
-    .replace(/\s*\(feat\..*?\)/gi, '')
-    .replace(/\s*\[feat\..*?\]/gi, '')
-    .replace(/\s*\(with\s+.*?\)/gi, '')
-    .replace(/\s*\(remastered.*?\)/gi, '')
-    .replace(/\s*\[remastered.*?\]/gi, '')
-    .replace(/\s*\(deluxe.*?\)/gi, '')
-    .replace(/\s*\(bonus track.*?\)/gi, '')
-    .replace(/[-–—]\s*(Single|EP|Remastered|Deluxe|Bonus|Version|Live).*/i, '')
+    .replace(/\s*\((?:feat\.|featuring|with|ft\.)\s+.*?\)/gi, '')
+    .replace(/\s*\[(?:feat\.|featuring|with|ft\.)\s+.*?\]/gi, '')
+    .replace(/\s*(?:feat\.|featuring|ft\.)\s+.*$/gi, '')
+    .replace(/\s*\((?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\)/gi, '')
+    .replace(/\s*\[(?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\]/gi, '')
+    .replace(/[-–—]\s*(?:Single|EP|Remastered|Remaster|Deluxe|Bonus|Version|Live|Edit|Radio Edit).*/i, '')
     .trim();
 }
 
@@ -147,8 +130,7 @@ function cleanArtistName(artist) {
   return main
     .replace(/,\s*.*$/, '')
     .replace(/&.*$/, '')
-    .replace(/\s*feat\..*$/i, '')
-    .replace(/\s*with\s+.*$/i, '')
+    .replace(/\s*(?:feat\.|featuring|ft\.|with)\s+.*$/i, '')
     .trim();
 }
 
@@ -156,6 +138,71 @@ function isTransientTrack(title) {
   if (!title) return true;
   const t = title.toLowerCase().trim();
   return t.startsWith('connecting') || t.startsWith('buffering') || t.startsWith('loading') || t === 'unknown track';
+}
+
+// String similarity calculator for candidate verification (Dice Bigram)
+function stringSimilarity(str1, str2) {
+  const s1 = (str1 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const s2 = (str2 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!s1 && !s2) return 1.0;
+  if (!s1 || !s2) return 0;
+  if (s1 === s2) return 1.0;
+  if (s1.includes(s2) || s2.includes(s1)) return 0.88;
+
+  const getBigrams = (str) => {
+    const bigrams = new Set();
+    for (let i = 0; i < str.length - 1; i++) {
+      bigrams.add(str.substring(i, i + 2));
+    }
+    return bigrams;
+  };
+  const b1 = getBigrams(s1);
+  const b2 = getBigrams(s2);
+  let intersection = 0;
+  for (const b of b1) {
+    if (b2.has(b)) intersection++;
+  }
+  return (2.0 * intersection) / (b1.size + b2.size || 1);
+}
+
+// Candidate scoring algorithm to eliminate wrong song / wrong video lyrics
+function scoreCandidate(candidate, targetTrack, targetArtist, targetDuration) {
+  if (!candidate) return -999;
+  if (candidate.instrumental) return -999;
+  if (!candidate.syncedLyrics && !candidate.plainLyrics) return -999;
+
+  let score = 0;
+
+  // Synced lyrics prioritized
+  if (candidate.syncedLyrics) score += 50;
+  else score += 10;
+
+  const trackSim = stringSimilarity(candidate.trackName || candidate.name, targetTrack);
+  const artistSim = stringSimilarity(candidate.artistName, targetArtist);
+
+  // If track name is too dissimilar (< 35% match), reject
+  if (trackSim < 0.35) return -999;
+
+  score += trackSim * 60;
+  score += artistSim * 30;
+
+  // Duration proximity scoring (avoids music video versions with video intros)
+  if (targetDuration > 0 && candidate.duration > 0) {
+    const diff = Math.abs(candidate.duration - targetDuration);
+    if (diff <= 2) score += 45;
+    else if (diff <= 5) score += 35;
+    else if (diff <= 10) score += 15;
+    else if (diff <= 20) score -= 15;
+    else score -= Math.min(60, diff * 2);
+  }
+
+  // Penalize video/dialogue versions
+  const candName = ((candidate.trackName || '') + ' ' + (candidate.name || '')).toLowerCase();
+  if (candName.includes('official video') || candName.includes('music video') || candName.includes('video version')) {
+    score -= 40;
+  }
+
+  return score;
 }
 
 // Fetch with AbortController timeout helper
@@ -269,55 +316,107 @@ async function fetchTrackAudioQuality(rawTrack, rawArtist) {
   return fallback;
 }
 
-// Synced Lyrics Fetcher with multi-strategy fast search
+// Synced Lyrics Fetcher with multi-strategy candidate verification and ranking
 async function fetchLyrics(rawTrack, rawArtist, duration) {
   if (!rawTrack || isTransientTrack(rawTrack)) return null;
 
   const track = cleanTrackName(rawTrack);
   const artist = cleanArtistName(rawArtist);
+  const durRound = duration && duration > 0 ? Math.round(duration) : 0;
   
-  const cacheKey = `${track.toLowerCase()}|${artist.toLowerCase()}`;
+  const cacheKey = `${track.toLowerCase()}|${artist.toLowerCase()}|${durRound}`;
   if (lyricsCache.has(cacheKey)) {
     return lyricsCache.get(cacheKey);
   }
 
-  // Strategy 1: Direct /api/get
+  const headers = { 'User-Agent': 'AppleMusicPixelMiniplayer/1.0' };
+
+  // Strategy 1: Direct /api/get with exact duration match
+  if (durRound > 0) {
+    try {
+      const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}&duration=${durRound}`;
+      const res = await fetchWithTimeout(url, { headers }, 2500);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (data.syncedLyrics || data.plainLyrics)) {
+          const result = {
+            syncedLyrics: data.syncedLyrics || null,
+            plainLyrics: data.plainLyrics || null,
+            trackName: data.trackName,
+            artistName: data.artistName
+          };
+          lyricsCache.set(cacheKey, result);
+          return result;
+        }
+      }
+    } catch (err) {}
+  }
+
+  // Strategy 2: Direct /api/get without duration
   try {
-    let url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
-    if (duration && duration > 0) {
-      url += `&duration=${Math.round(duration)}`;
-    }
-    
-    const res = await fetchWithTimeout(url, { headers: { 'User-Agent': 'AppleMusicPixelMiniplayer/1.0' } }, 3000);
+    const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
+    const res = await fetchWithTimeout(url, { headers }, 2500);
     if (res.ok) {
       const data = await res.json();
       if (data && (data.syncedLyrics || data.plainLyrics)) {
-        const result = {
-          syncedLyrics: data.syncedLyrics || null,
-          plainLyrics: data.plainLyrics || null,
-          trackName: data.trackName,
-          artistName: data.artistName
-        };
-        lyricsCache.set(cacheKey, result);
-        return result;
+        // If duration provided, make sure it's within reason (<= 15s delta)
+        const durDelta = (durRound > 0 && data.duration > 0) ? Math.abs(data.duration - durRound) : 0;
+        if (durDelta <= 15) {
+          const result = {
+            syncedLyrics: data.syncedLyrics || null,
+            plainLyrics: data.plainLyrics || null,
+            trackName: data.trackName,
+            artistName: data.artistName
+          };
+          lyricsCache.set(cacheKey, result);
+          return result;
+        }
       }
     }
   } catch (err) {}
 
-  // Strategy 2: Fast query search with combined query
+  // Strategy 3: Structured /api/search with track_name & artist_name params + Candidate Scoring
   try {
-    const searchQuery = `${track} ${artist}`.trim();
-    const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`;
-    const res = await fetchWithTimeout(searchUrl, { headers: { 'User-Agent': 'AppleMusicPixelMiniplayer/1.0' } }, 3500);
+    const searchUrl = `https://lrclib.net/api/search?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
+    const res = await fetchWithTimeout(searchUrl, { headers }, 3000);
     if (res.ok) {
       const results = await res.json();
       if (Array.isArray(results) && results.length > 0) {
-        // Priority: exact duration match or synced lyrics
-        let best = results.find(r => r.syncedLyrics && duration > 0 && Math.abs((r.duration || 0) - duration) < 5);
-        if (!best) {
-          best = results.find(r => r.syncedLyrics) || results[0];
+        const scored = results
+          .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
+          .filter(item => item.score > 50)
+          .sort((a, b) => b.score - a.score);
+
+        if (scored.length > 0) {
+          const best = scored[0].r;
+          const result = {
+            syncedLyrics: best.syncedLyrics || null,
+            plainLyrics: best.plainLyrics || null,
+            trackName: best.trackName,
+            artistName: best.artistName
+          };
+          lyricsCache.set(cacheKey, result);
+          return result;
         }
-        if (best && (best.syncedLyrics || best.plainLyrics)) {
+      }
+    }
+  } catch (err) {}
+
+  // Strategy 4: Fallback query search ?q= with Candidate Scoring
+  try {
+    const searchQuery = `${track} ${artist}`.trim();
+    const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`;
+    const res = await fetchWithTimeout(searchUrl, { headers }, 3000);
+    if (res.ok) {
+      const results = await res.json();
+      if (Array.isArray(results) && results.length > 0) {
+        const scored = results
+          .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
+          .filter(item => item.score > 50)
+          .sort((a, b) => b.score - a.score);
+
+        if (scored.length > 0) {
+          const best = scored[0].r;
           const result = {
             syncedLyrics: best.syncedLyrics || null,
             plainLyrics: best.plainLyrics || null,
@@ -355,28 +454,7 @@ ipcMain.handle('toggle-always-on-top', () => {
   return false;
 });
 
-let preFullscreenBounds = { width: 380, height: 580 };
 
-ipcMain.handle('toggle-fullscreen', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    const isFs = mainWindow.isFullScreen();
-    const nextState = !isFs;
-    if (nextState) {
-      preFullscreenBounds = mainWindow.getBounds();
-      mainWindow.setFullScreen(true);
-    } else {
-      mainWindow.setFullScreen(false);
-      if (preFullscreenBounds && preFullscreenBounds.width) {
-        mainWindow.setBounds(preFullscreenBounds);
-      } else {
-        mainWindow.setSize(380, 580);
-      }
-    }
-    mainWindow.webContents.send('fullscreen-change', nextState);
-    return nextState;
-  }
-  return false;
-});
 
 ipcMain.on('window-minimize', () => {
   if (mainWindow) mainWindow.minimize();

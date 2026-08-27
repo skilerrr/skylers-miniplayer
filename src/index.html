@@ -23,11 +23,6 @@
       <div class="mesh-fluid-blob mesh-blob-3" id="glowOrb3"></div>
       <div class="mesh-fluid-blob mesh-blob-4" id="glowOrb4"></div>
     </div>
-    
-    <!-- Floating Exit Fullscreen Control (Apple Music Style) -->
-    <button class="fullscreen-exit-btn hidden no-drag" id="btnExitFullscreen" title="Exit Fullscreen (Esc / F11)">
-      <span>↙</span> Exit Fullscreen
-    </button>
 
     <!-- 1. TOP HEADER: Track Info + Window Controls -->
     <header class="app-header drag-region">
@@ -56,23 +51,44 @@
 
       <!-- Window Action Controls -->
       <div class="header-actions no-drag">
-        <button class="win-btn win-btn-icon" id="btnFullscreen" title="Fullscreen (F / F11)">⛶</button>
         <button class="win-btn win-btn-icon" id="btnPin" title="Always on Top">📌</button>
         <button class="win-btn win-btn-icon" id="btnMin" title="Minimize">─</button>
         <button class="win-btn win-btn-icon win-btn-danger" id="btnClose" title="Close">✕</button>
       </div>
     </header>
 
-    <!-- 2. CENTER: Full-Height Synced Karaoke Lyrics -->
-    <main class="lyrics-view-area" id="lyricsViewArea">
-      <div class="lyrics-scroll-container" id="lyricsContainer">
-        <div class="lyrics-placeholder" id="lyricsPlaceholder">
-          <div class="music-notes">♫ ♪ ♫</div>
-          <p>Waiting for lyrics...</p>
-          <span class="hint">Apple Music synced karaoke</span>
+    <!-- 2. CENTER: Full-Height Synced Karaoke Lyrics & Queue Panel -->
+    <main class="content-view-area">
+      <!-- 2A. Synced Lyrics Area -->
+      <section class="lyrics-view-area" id="lyricsViewArea">
+        <div class="lyrics-scroll-container" id="lyricsContainer">
+          <div class="lyrics-placeholder" id="lyricsPlaceholder">
+            <div class="music-notes">♫ ♪ ♫</div>
+            <p>Waiting for lyrics...</p>
+            <span class="hint">Apple Music synced karaoke</span>
+          </div>
+          <div class="lyrics-list" id="lyricsList"></div>
         </div>
-        <div class="lyrics-list" id="lyricsList"></div>
-      </div>
+      </section>
+
+      <!-- 2B. Recently Played History Area (Clean & Fast) -->
+      <section class="history-view-area hidden" id="historyViewArea">
+        <div class="history-header-bar">
+          <span class="history-title">History</span>
+          <button class="history-clear-btn" id="btnClearHistory" title="Clear History">Clear</button>
+        </div>
+
+        <div class="history-scroll-container" id="historyScrollContainer">
+          <div class="history-placeholder" id="historyPlaceholder">
+            <div class="history-empty-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+            </div>
+            <p>No played songs yet</p>
+            <span class="hint">Played songs will appear here</span>
+          </div>
+          <div class="history-items-list" id="historyItemsList"></div>
+        </div>
+      </section>
     </main>
 
     <!-- 3. BOTTOM: Timeline & Action / Transport Controls -->
@@ -91,9 +107,9 @@
 
       <!-- Transport Buttons Row (Pure Clean White SVGs) -->
       <div class="buttons-row">
-        <!-- Left group: Options -->
+        <!-- Left group: Theme & Visual Effects Trigger -->
         <div class="btn-group-left">
-          <button class="action-btn" id="btnMore" title="More Options">•••</button>
+          <button class="action-btn" id="btnThemeSelector" title="Themes & Visual Effects">•••</button>
         </div>
 
         <!-- Center group: Playback controls (Clean SVGs) -->
@@ -110,32 +126,19 @@
           </button>
         </div>
 
-        <!-- Right group: Lyrics view & Theme popup menu trigger -->
+        <!-- Right group: Lyrics view & History Toggle -->
         <div class="btn-group-right">
-          <button class="action-btn active" id="btnToggleLyrics" title="Toggle Lyrics">
+          <button class="action-btn active" id="btnToggleLyrics" title="Lyrics View">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 12H7v-2h10v2zm0-3H7V9h10v2zm0-3H7V6h10v2z"/></svg>
           </button>
-          <button class="action-btn" id="btnEngineMenu" title="Theme & Settings">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+          <button class="action-btn" id="btnToggleHistory" title="History">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
           </button>
         </div>
       </div>
     </footer>
 
-    <!-- 4. Apple Music Volume HUD Overlay (Auto-Fading on Scroll) -->
-    <div class="volume-hud-overlay hidden" id="volumeHudOverlay">
-      <div class="volume-hud-card">
-        <span class="volume-icon" id="volumeIcon">
-          <svg class="vol-svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-          </svg>
-        </span>
-        <div class="volume-bar-track">
-          <div class="volume-bar-fill" id="volumeBarFill"></div>
-        </div>
-        <span class="volume-percent" id="volumePercent">100%</span>
-      </div>
-    </div>
+
 
     <!-- Pop-up Settings & Theme Selection Menu -->
     <div class="theme-popup-menu hidden" id="themePopupMenu">

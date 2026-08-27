@@ -173,9 +173,11 @@ while ($true) {
             $artist = $rawArtist
             $album = $rawAlbum
 
-            if ($rawArtist -match '^(.*?)\s*[\u2014\u2013-]\s*(.*)$' -and -not $album) {
+            if ($rawArtist -match '^(.*?)\s*[\u2014\u2013-]\s*(.*)$') {
                 $artist = $Matches[1].Trim()
-                $album = $Matches[2].Trim()
+                if (-not $album) {
+                    $album = $Matches[2].Trim()
+                }
             }
 
             $currentStatus = if ($playbackInfo) { $playbackInfo.PlaybackStatus.ToString() } else { "Closed" }
@@ -191,8 +193,6 @@ while ($true) {
                             $basePos += $elapsedSinceUpdate
                         }
                     } catch {}
-                    # Live DAC / SMTC Playhead Calibration Offset (+0.95s)
-                    $basePos += 0.95
                 }
                 $pos = [Math]::Round($basePos, 2)
                 $dur = [Math]::Round($timeline.EndTime.TotalSeconds, 2)
@@ -216,8 +216,8 @@ while ($true) {
                             $bytes = $ms.ToArray()
                             $ms.Dispose()
                             if ($bytes.Length -gt 0) {
-                                [System.IO.File]::WriteAllBytes($coverFilePath, $bytes)
-                                $coverUrl = "file:///" + ($coverFilePath -replace '\\', '/') + "?v=" + [DateTime]::UtcNow.Ticks
+                                $b64 = [Convert]::ToBase64String($bytes)
+                                $coverUrl = "data:image/jpeg;base64,$b64"
                             }
                         }
                     } catch {}
