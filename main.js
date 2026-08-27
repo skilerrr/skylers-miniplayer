@@ -65,7 +65,7 @@ function createWindow() {
 }
 
 function startSmtcBridge() {
-  const scriptPath = path.join(__dirname, 'smtc_bridge.ps1');
+  const scriptPath = path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), 'smtc_bridge.ps1');
   smtcProcess = spawn('powershell.exe', [
     '-ExecutionPolicy', 'Bypass',
     '-NoProfile',
@@ -87,7 +87,7 @@ function startSmtcBridge() {
       const lineTrim = line.trim();
       const data = JSON.parse(lineTrim);
       if (data && data.type === 'media_update') {
-        const coverTempPath = path.join(__dirname, 'cover_temp.jpg');
+        const coverTempPath = path.join(app.getPath('temp'), 'apple_music_miniplayer_cover.jpg');
         if (data.trackChanged && fs.existsSync(coverTempPath)) {
           try {
             const buf = fs.readFileSync(coverTempPath);

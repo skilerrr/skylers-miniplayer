@@ -1,4 +1,6 @@
 node_modules/
+dist/
 cover_temp.jpg
 .DS_Store
 *.log
+

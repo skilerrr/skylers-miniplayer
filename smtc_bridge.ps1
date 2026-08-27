@@ -7,7 +7,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$coverFilePath = Join-Path $scriptDir "cover_temp.jpg"
+$coverFilePath = Join-Path ([System.IO.Path]::GetTempPath()) "apple_music_miniplayer_cover.jpg"
 
 # Compile AppVolumeHelper for independent Apple Music volume control
 $volumeHelperPath = Join-Path $scriptDir "AppVolumeHelper.cs"

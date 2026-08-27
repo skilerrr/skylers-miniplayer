@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "build": "electron-builder --win --x64"
   },
   "keywords": [
     "apple-music",
@@ -17,7 +18,40 @@
   ],
   "author": "Antigravity",
   "license": "MIT",
+  "build": {
+    "appId": "com.skilerrr.applemusicminiplayer",
+    "productName": "Apple Music Miniplayer",
+    "asar": true,
+    "asarUnpack": [
+      "smtc_bridge.ps1",
+      "AppVolumeHelper.cs"
+    ],
+    "files": [
+      "**/*",
+      "!test_*.ps1",
+      "!cover_temp.jpg",
+      "!.git/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Apple Music Miniplayer"
+    }
+  },
   "devDependencies": {
-    "electron": "^31.3.1"
+    "electron": "^31.3.1",
+    "electron-builder": "^26.15.3"
   }
 }
