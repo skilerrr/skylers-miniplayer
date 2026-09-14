@@ -187,7 +187,24 @@
             <button class="effect-toggle-btn" id="menuTogglePixel">👾 8-Bit Art: OFF</button>
           </div>
           <div class="toggle-options-row" style="margin-top: 6px;">
+            <button class="effect-toggle-btn active" id="menuToggleTypewriter">⌨️ Typewriter: ON</button>
             <button class="effect-toggle-btn" id="menuToggleCrt">⚡ CRT FX: OFF</button>
+          </div>
+        </div>
+
+        <!-- 3. Lyrics Timing Offset (Sync Delay) -->
+        <div class="menu-section">
+          <div class="section-label">LYRIC TIMING SYNC (DELAY)</div>
+          <div class="delay-control-box">
+            <div class="delay-stepper-row">
+              <button class="delay-btn" id="btnDelayMinus" title="Delay lyrics / Slower (-0.1s)">−0.1s</button>
+              <div class="delay-display-container">
+                <span class="delay-val" id="delayValueDisplay">+0.00s</span>
+                <span class="delay-hint" id="delayHintDisplay">Default</span>
+              </div>
+              <button class="delay-btn" id="btnDelayPlus" title="Advance lyrics / Faster (+0.1s)">+0.1s</button>
+            </div>
+            <button class="delay-reset-btn" id="btnDelayReset" title="Reset delay to default (0.00s)">↺ Reset Delay</button>
           </div>
         </div>
       </div>

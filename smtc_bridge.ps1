@@ -173,7 +173,7 @@ while ($true) {
             $artist = $rawArtist
             $album = $rawAlbum
 
-            if ($rawArtist -match '^(.*?)\s*[\u2014\u2013-]\s*(.*)$') {
+            if ($rawArtist -match '^(.*?)\s*[\u2014\u2013]\s*(.*)$' -or $rawArtist -match '^(.*?)\s+[-–—]\s+(.*)$') {
                 $artist = $Matches[1].Trim()
                 if (-not $album) {
                     $album = $Matches[2].Trim()

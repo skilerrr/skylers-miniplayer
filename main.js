@@ -24,8 +24,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 380,
     height: 580,
-    minWidth: 320,
-    minHeight: 130,
+    minWidth: 230,
+    minHeight: 110,
     x: Math.max(0, screenWidth - 410),
     y: Math.max(0, screenHeight - 610),
     frame: false,
@@ -108,28 +108,61 @@ function sendSmtcCommand(cmd) {
   }
 }
 
+// Local .lrc file finder helper (prioritizes user's custom synced lyrics)
+function findLocalLrc(track, artist) {
+  try {
+    const candidateDirs = [
+      path.join(__dirname, 'lyrics'),
+      path.join(path.dirname(process.execPath), 'lyrics'),
+      path.join(app.getPath('userData'), 'lyrics')
+    ];
+
+    const cleanT = (track || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanA = (artist || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    for (const lyricsDir of candidateDirs) {
+      if (!fs.existsSync(lyricsDir)) continue;
+      const files = fs.readdirSync(lyricsDir);
+      for (const f of files) {
+        if (!f.toLowerCase().endsWith('.lrc')) continue;
+        const fBase = f.replace(/\.lrc$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (fBase === cleanT || fBase === `${cleanA}${cleanT}` || fBase === `${cleanT}${cleanA}`) {
+          const fullPath = path.join(lyricsDir, f);
+          return fs.readFileSync(fullPath, 'utf-8');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error reading local lyrics:', err);
+  }
+  return null;
+}
+
 // Clean Track & Artist names helper
 function cleanTrackName(track) {
   if (!track) return '';
   return track
     .replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'")
+    .replace(/^["'\s]+|["'\s]+$/g, '')
     .replace(/\s*\((?:feat\.|featuring|with|ft\.)\s+.*?\)/gi, '')
     .replace(/\s*\[(?:feat\.|featuring|with|ft\.)\s+.*?\]/gi, '')
     .replace(/\s*(?:feat\.|featuring|ft\.)\s+.*$/gi, '')
     .replace(/\s*\((?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\)/gi, '')
     .replace(/\s*\[(?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\]/gi, '')
+    .replace(/\s*\(\d{4}\s+(?:remaster|deluxe|edition|anniversary).*?\)/gi, '')
+    .replace(/\s*\[\d{4}\s+(?:remaster|deluxe|edition|anniversary).*?\]/gi, '')
+    .replace(/\s*\((?:from\s+|ost|soundtrack).*?\)/gi, '')
     .replace(/[-–—]\s*(?:Single|EP|Remastered|Remaster|Deluxe|Bonus|Version|Live|Edit|Radio Edit).*/i, '')
     .trim();
 }
 
 function cleanArtistName(artist) {
   if (!artist) return '';
-  const norm = artist.replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'");
-  const parts = norm.split(/\s*[\u2014\u2013-]\s*/);
+  const norm = artist.replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'").trim();
+  // Only split on em-dash, en-dash, or hyphen with surrounding spaces (preserves Jay-Z, Blink-182)
+  const parts = norm.split(/\s*[\u2014\u2013]\s*|\s+[-–—]\s+/);
   let main = parts[0] || norm;
   return main
-    .replace(/,\s*.*$/, '')
-    .replace(/&.*$/, '')
     .replace(/\s*(?:feat\.|featuring|ft\.|with)\s+.*$/i, '')
     .trim();
 }
@@ -173,15 +206,15 @@ function scoreCandidate(candidate, targetTrack, targetArtist, targetDuration) {
 
   let score = 0;
 
-  // Synced lyrics prioritized
-  if (candidate.syncedLyrics) score += 50;
-  else score += 10;
+  // Synced lyrics heavily prioritized
+  if (candidate.syncedLyrics) score += 60;
+  else score += 15;
 
   const trackSim = stringSimilarity(candidate.trackName || candidate.name, targetTrack);
   const artistSim = stringSimilarity(candidate.artistName, targetArtist);
 
-  // If track name is too dissimilar (< 35% match), reject
-  if (trackSim < 0.35) return -999;
+  // If track name is too dissimilar (< 30% match), reject
+  if (trackSim < 0.30) return -999;
 
   score += trackSim * 60;
   score += artistSim * 30;
@@ -189,11 +222,11 @@ function scoreCandidate(candidate, targetTrack, targetArtist, targetDuration) {
   // Duration proximity scoring (avoids music video versions with video intros)
   if (targetDuration > 0 && candidate.duration > 0) {
     const diff = Math.abs(candidate.duration - targetDuration);
-    if (diff <= 2) score += 45;
-    else if (diff <= 5) score += 35;
+    if (diff <= 2) score += 40;
+    else if (diff <= 5) score += 30;
     else if (diff <= 10) score += 15;
-    else if (diff <= 20) score -= 15;
-    else score -= Math.min(60, diff * 2);
+    else if (diff <= 20) score -= 10;
+    else score -= Math.min(50, diff * 2);
   }
 
   // Penalize video/dialogue versions
@@ -329,41 +362,62 @@ async function fetchLyrics(rawTrack, rawArtist, duration) {
     return lyricsCache.get(cacheKey);
   }
 
-  const headers = { 'User-Agent': 'AppleMusicPixelMiniplayer/1.0' };
+  // 1. Check local custom .lrc file in lyrics/ directory first
+  const localLrc = findLocalLrc(rawTrack, rawArtist) || findLocalLrc(track, artist);
+  if (localLrc) {
+    const localResult = {
+      syncedLyrics: localLrc,
+      plainLyrics: null,
+      trackName: rawTrack,
+      artistName: rawArtist,
+      isLocal: true
+    };
+    lyricsCache.set(cacheKey, localResult);
+    return localResult;
+  }
 
-  // Strategy 1: Direct /api/get with exact duration match
+  const headers = { 'User-Agent': 'AppleMusicPixelMiniplayer/1.0' };
+  let fallbackPlain = null;
+
+  // 2. Strategy 1: Direct /api/get with exact duration match
   if (durRound > 0) {
     try {
       const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}&duration=${durRound}`;
-      const res = await fetchWithTimeout(url, { headers }, 2500);
+      const res = await fetchWithTimeout(url, { headers }, 5000);
       if (res.ok) {
         const data = await res.json();
-        if (data && (data.syncedLyrics || data.plainLyrics)) {
+        if (data && data.syncedLyrics) {
           const result = {
-            syncedLyrics: data.syncedLyrics || null,
+            syncedLyrics: data.syncedLyrics,
             plainLyrics: data.plainLyrics || null,
             trackName: data.trackName,
             artistName: data.artistName
           };
           lyricsCache.set(cacheKey, result);
           return result;
+        } else if (data && data.plainLyrics && !fallbackPlain) {
+          fallbackPlain = {
+            syncedLyrics: null,
+            plainLyrics: data.plainLyrics,
+            trackName: data.trackName,
+            artistName: data.artistName
+          };
         }
       }
     } catch (err) {}
   }
 
-  // Strategy 2: Direct /api/get without duration
+  // 3. Strategy 2: Direct /api/get without duration
   try {
     const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
-    const res = await fetchWithTimeout(url, { headers }, 2500);
+    const res = await fetchWithTimeout(url, { headers }, 5000);
     if (res.ok) {
       const data = await res.json();
-      if (data && (data.syncedLyrics || data.plainLyrics)) {
-        // If duration provided, make sure it's within reason (<= 15s delta)
+      if (data && data.syncedLyrics) {
         const durDelta = (durRound > 0 && data.duration > 0) ? Math.abs(data.duration - durRound) : 0;
-        if (durDelta <= 15) {
+        if (durRound === 0 || durDelta <= 15) {
           const result = {
-            syncedLyrics: data.syncedLyrics || null,
+            syncedLyrics: data.syncedLyrics,
             plainLyrics: data.plainLyrics || null,
             trackName: data.trackName,
             artistName: data.artistName
@@ -371,64 +425,125 @@ async function fetchLyrics(rawTrack, rawArtist, duration) {
           lyricsCache.set(cacheKey, result);
           return result;
         }
+      } else if (data && data.plainLyrics && !fallbackPlain) {
+        fallbackPlain = {
+          syncedLyrics: null,
+          plainLyrics: data.plainLyrics,
+          trackName: data.trackName,
+          artistName: data.artistName
+        };
       }
     }
   } catch (err) {}
 
-  // Strategy 3: Structured /api/search with track_name & artist_name params + Candidate Scoring
+  // 4. Strategy 3: Structured /api/search with track_name & artist_name params + Candidate Scoring
   try {
     const searchUrl = `https://lrclib.net/api/search?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
-    const res = await fetchWithTimeout(searchUrl, { headers }, 3000);
+    const res = await fetchWithTimeout(searchUrl, { headers }, 5500);
     if (res.ok) {
       const results = await res.json();
       if (Array.isArray(results) && results.length > 0) {
         const scored = results
           .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
-          .filter(item => item.score > 50)
+          .filter(item => item.score >= 35)
           .sort((a, b) => b.score - a.score);
 
-        if (scored.length > 0) {
-          const best = scored[0].r;
+        const bestSynced = scored.find(item => item.r.syncedLyrics);
+        if (bestSynced) {
           const result = {
-            syncedLyrics: best.syncedLyrics || null,
-            plainLyrics: best.plainLyrics || null,
-            trackName: best.trackName,
-            artistName: best.artistName
+            syncedLyrics: bestSynced.r.syncedLyrics,
+            plainLyrics: bestSynced.r.plainLyrics || null,
+            trackName: bestSynced.r.trackName,
+            artistName: bestSynced.r.artistName
           };
           lyricsCache.set(cacheKey, result);
           return result;
+        }
+
+        if (!fallbackPlain && scored.length > 0 && scored[0].r.plainLyrics) {
+          fallbackPlain = {
+            syncedLyrics: null,
+            plainLyrics: scored[0].r.plainLyrics,
+            trackName: scored[0].r.trackName,
+            artistName: scored[0].r.artistName
+          };
         }
       }
     }
   } catch (err) {}
 
-  // Strategy 4: Fallback query search ?q= with Candidate Scoring
+  // 5. Strategy 4: Fallback fuzzy query search ?q= with Candidate Scoring
   try {
     const searchQuery = `${track} ${artist}`.trim();
     const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`;
-    const res = await fetchWithTimeout(searchUrl, { headers }, 3000);
+    const res = await fetchWithTimeout(searchUrl, { headers }, 5500);
     if (res.ok) {
       const results = await res.json();
       if (Array.isArray(results) && results.length > 0) {
         const scored = results
           .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
-          .filter(item => item.score > 50)
+          .filter(item => item.score >= 35)
           .sort((a, b) => b.score - a.score);
 
-        if (scored.length > 0) {
-          const best = scored[0].r;
+        const bestSynced = scored.find(item => item.r.syncedLyrics);
+        if (bestSynced) {
           const result = {
-            syncedLyrics: best.syncedLyrics || null,
-            plainLyrics: best.plainLyrics || null,
-            trackName: best.trackName,
-            artistName: best.artistName
+            syncedLyrics: bestSynced.r.syncedLyrics,
+            plainLyrics: bestSynced.r.plainLyrics || null,
+            trackName: bestSynced.r.trackName,
+            artistName: bestSynced.r.artistName
           };
           lyricsCache.set(cacheKey, result);
           return result;
         }
+
+        if (!fallbackPlain && scored.length > 0 && scored[0].r.plainLyrics) {
+          fallbackPlain = {
+            syncedLyrics: null,
+            plainLyrics: scored[0].r.plainLyrics,
+            trackName: scored[0].r.trackName,
+            artistName: scored[0].r.artistName
+          };
+        }
       }
     }
   } catch (err) {}
+
+  // 6. Strategy 5: If raw title is different from cleaned track, try search with raw title
+  if (rawTrack && rawTrack !== track) {
+    try {
+      const rawQuery = `${rawTrack} ${artist}`.trim();
+      const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(rawQuery)}`;
+      const res = await fetchWithTimeout(searchUrl, { headers }, 5000);
+      if (res.ok) {
+        const results = await res.json();
+        if (Array.isArray(results) && results.length > 0) {
+          const scored = results
+            .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
+            .filter(item => item.score >= 35)
+            .sort((a, b) => b.score - a.score);
+
+          const bestSynced = scored.find(item => item.r.syncedLyrics);
+          if (bestSynced) {
+            const result = {
+              syncedLyrics: bestSynced.r.syncedLyrics,
+              plainLyrics: bestSynced.r.plainLyrics || null,
+              trackName: bestSynced.r.trackName,
+              artistName: bestSynced.r.artistName
+            };
+            lyricsCache.set(cacheKey, result);
+            return result;
+          }
+        }
+      }
+    } catch (err) {}
+  }
+
+  // 7. If plain lyrics were found during any search stage, return them gracefully
+  if (fallbackPlain) {
+    lyricsCache.set(cacheKey, fallbackPlain);
+    return fallbackPlain;
+  }
 
   return null;
 }
