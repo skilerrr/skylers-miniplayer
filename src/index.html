@@ -61,11 +61,20 @@
     <main class="content-view-area">
       <!-- 2A. Synced Lyrics Area -->
       <section class="lyrics-view-area" id="lyricsViewArea">
+        <div class="lyrics-top-bar">
+          <button class="lyric-source-pill" id="btnSourcePill" title="Select Lyric Source or Search Options">
+            <span class="pill-dot">✦</span>
+            <span class="pill-text" id="lyricSourceLabel">Lyrics: Auto</span>
+            <span class="pill-arrow">▾</span>
+          </button>
+        </div>
+
         <div class="lyrics-scroll-container" id="lyricsContainer">
           <div class="lyrics-placeholder" id="lyricsPlaceholder">
             <div class="music-notes">♫ ♪ ♫</div>
             <p>Waiting for lyrics...</p>
             <span class="hint">Apple Music synced karaoke</span>
+            <button class="btn-search-lyrics hidden" id="btnSearchLyrics">🔍 Select Source / Search</button>
           </div>
           <div class="lyrics-list" id="lyricsList"></div>
         </div>
@@ -205,6 +214,86 @@
               <button class="delay-btn" id="btnDelayPlus" title="Advance lyrics / Faster (+0.1s)">+0.1s</button>
             </div>
             <button class="delay-reset-btn" id="btnDelayReset" title="Reset delay to default (0.00s)">↺ Reset Delay</button>
+          </div>
+        </div>
+
+        <!-- 4. Default Lyrics Provider -->
+        <div class="menu-section">
+          <div class="section-label">DEFAULT LYRIC SOURCE</div>
+          <div class="lyric-source-options-grid" id="menuSourceOptions">
+            <button class="source-select-btn active" data-pref="auto">
+              <span class="src-icon">⚡</span>
+              <span class="src-name">Smart Fallback (All)</span>
+            </button>
+            <button class="source-select-btn" data-pref="lrclib">
+              <span class="src-icon">🌐</span>
+              <span class="src-name">LRCLIB</span>
+            </button>
+            <button class="source-select-btn" data-pref="qq">
+              <span class="src-icon">🎵</span>
+              <span class="src-name">QQ Music</span>
+            </button>
+            <button class="source-select-btn" data-pref="musixmatch">
+              <span class="src-icon">🎙️</span>
+              <span class="src-name">Musixmatch</span>
+            </button>
+            <button class="source-select-btn" data-pref="local">
+              <span class="src-icon">📁</span>
+              <span class="src-name">Local (.lrc)</span>
+            </button>
+          </div>
+
+          <div class="mxm-token-row" id="mxmTokenRow">
+            <div class="mxm-token-label">Musixmatch User Token (Optional):</div>
+            <div class="mxm-token-input-group">
+              <input type="password" class="mxm-token-input" id="inputMxmToken" placeholder="Paste musixmatchUserToken..." />
+              <button class="mxm-token-save-btn" id="btnSaveMxmToken">Save</button>
+            </div>
+            <span class="mxm-token-hint">Token is stored locally. If empty, Smart Fallback uses other active databases.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. MODAL: Lyrics Source Selection & Alternative Candidates Picker -->
+    <div class="lyrics-source-modal hidden" id="lyricsSourceModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-stack">
+            <span class="modal-title">LYRIC SOURCES & OPTIONS</span>
+            <span class="modal-subtitle" id="modalTrackSub">Select provider or pick an alternative version</span>
+          </div>
+          <button class="modal-close-btn" id="btnCloseLyricsModal">✕</button>
+        </div>
+
+        <!-- Source Provider Tabs -->
+        <div class="source-tabs-row" id="sourceTabsRow">
+          <button class="source-tab-btn active" data-source="all">⚡ All Sources</button>
+          <button class="source-tab-btn" data-source="lrclib">🌐 LRCLIB</button>
+          <button class="source-tab-btn" data-source="qq">🎵 QQ Music</button>
+          <button class="source-tab-btn" data-source="musixmatch">🎙️ Musixmatch</button>
+          <button class="source-tab-btn" data-source="local">📁 Local</button>
+        </div>
+
+        <!-- Query Inputs -->
+        <div class="lyrics-search-box">
+          <div class="search-inputs-row">
+            <input type="text" class="search-input" id="searchTrackInput" placeholder="Song title..." />
+            <input type="text" class="search-input" id="searchArtistInput" placeholder="Artist name..." />
+            <button class="btn-do-search" id="btnDoSearch">Search</button>
+          </div>
+        </div>
+
+        <!-- Candidate Results List -->
+        <div class="candidates-container" id="candidatesContainer">
+          <div class="candidates-loading hidden" id="candidatesLoading">
+            <div class="candidate-spinner"></div>
+            <span>Searching providers...</span>
+          </div>
+          <div class="candidates-list" id="candidatesList"></div>
+          <div class="candidates-empty hidden" id="candidatesEmpty">
+            <p>No matching lyrics found.</p>
+            <span class="hint">Try searching with simplified song name or select another provider above.</span>
           </div>
         </div>
       </div>

@@ -7,7 +7,11 @@ contextBridge.exposeInMainWorld('miniplayerAPI', {
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   closeWindow: () => ipcRenderer.send('window-close'),
   resizeWindow: (width, height) => ipcRenderer.send('window-resize', { width, height }),
-  fetchLyrics: (track, artist, duration) => ipcRenderer.invoke('fetch-lyrics', { track, artist, duration }),
+  fetchLyrics: (track, artist, duration, preferredSource) => ipcRenderer.invoke('fetch-lyrics', { track, artist, duration, preferredSource }),
+  searchLyricsCandidates: (query, track, artist, sourceFilter) => ipcRenderer.invoke('search-lyrics-candidates', { query, track, artist, sourceFilter }),
+  fetchLyricCandidate: (candidate) => ipcRenderer.invoke('fetch-lyric-candidate', { candidate }),
+  getMusixmatchToken: () => ipcRenderer.invoke('get-musixmatch-token'),
+  setMusixmatchToken: (token) => ipcRenderer.invoke('set-musixmatch-token', { token }),
   fetchQuality: (track, artist) => ipcRenderer.invoke('fetch-quality', { track, artist }),
   getAppVersion: () => ipcRenderer.invoke('get-app-version')
 });

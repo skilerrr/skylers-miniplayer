@@ -1575,4 +1575,549 @@ body:not(.theme-appleglass) .lyric-line.active {
   }
 }
 
+/* ==========================================================================
+   LYRIC SOURCE SELECTION & CANDIDATES PICKER
+   ========================================================================== */
+
+/* 1. Lyrics Top Bar & Source Pill */
+.lyrics-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 6px 2px 6px;
+  position: relative;
+  z-index: 12;
+  flex-shrink: 0;
+}
+
+.lyric-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  user-select: none;
+}
+
+.lyric-source-pill:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.lyric-source-pill .pill-dot {
+  color: #fa2d48;
+  font-size: 9px;
+  transition: transform 0.2s ease;
+}
+
+.lyric-source-pill:hover .pill-dot {
+  transform: rotate(45deg);
+}
+
+.lyric-source-pill .pill-arrow {
+  font-size: 8px;
+  opacity: 0.6;
+}
+
+/* 2. Button in Placeholder when lyrics not found */
+.btn-search-lyrics {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 22px;
+  padding: 7px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-search-lyrics:hover {
+  background: rgba(250, 45, 72, 0.28);
+  border-color: rgba(250, 45, 72, 0.6);
+  color: #ffffff;
+  transform: scale(1.03);
+}
+
+.btn-search-lyrics.hidden {
+  display: none !important;
+}
+
+/* 3. Modal Container & Backdrop */
+.lyrics-source-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lyrics-source-modal.hidden {
+  display: none !important;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 340px;
+  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(30, 30, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.modal-subtitle {
+  font-size: 10px;
+  color: var(--text-muted);
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: rgba(250, 45, 72, 0.3);
+  color: #ffffff;
+  border-color: rgba(250, 45, 72, 0.5);
+}
+
+/* 4. Source Filter Tabs in Modal */
+.source-tabs-row {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 6px 16px;
+  overflow-x: auto;
+}
+
+.source-tabs-row::-webkit-scrollbar {
+  display: none;
+}
+
+.source-tab-btn {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.source-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.source-tab-btn.active {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+}
+
+/* 5. Search Bar in Modal */
+.lyrics-search-box {
+  padding: 6px 16px 10px 16px;
+}
+
+.search-inputs-row {
+  display: flex;
+  gap: 6px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+  border-color: #fa2d48;
+}
+
+.btn-do-search {
+  background: #fa2d48;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btn-do-search:hover {
+  opacity: 0.85;
+}
+
+/* 6. Candidate List Container */
+.candidates-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 14px 16px;
+  min-height: 180px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.candidates-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.candidates-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.candidates-loading,
+.candidates-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  padding: 30px 10px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.candidate-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #fa2d48;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.candidates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.candidate-item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.candidate-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.candidate-item.active {
+  border-color: #fa2d48;
+  background: rgba(250, 45, 72, 0.15);
+}
+
+.candidate-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.candidate-source-badge {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
+}
+
+.badge-lrclib {
+  background: rgba(0, 180, 255, 0.2);
+  color: #40c4ff;
+  border: 1px solid rgba(0, 180, 255, 0.4);
+}
+
+.badge-qq {
+  background: rgba(30, 215, 96, 0.2);
+  color: #1ed760;
+  border: 1px solid rgba(30, 215, 96, 0.4);
+}
+
+.badge-musixmatch {
+  background: rgba(255, 106, 0, 0.2);
+  color: #ff9100;
+  border: 1px solid rgba(255, 106, 0, 0.4);
+}
+
+.badge-local {
+  background: rgba(171, 71, 188, 0.2);
+  color: #ce93d8;
+  border: 1px solid rgba(171, 71, 188, 0.4);
+}
+
+.candidate-sync-tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: #30d158;
+}
+
+.candidate-sync-tag.plain {
+  color: #ff9f0a;
+}
+
+.candidate-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.candidate-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.candidate-preview {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-style: italic;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 7. Settings Menu Source Selectors */
+.lyric-source-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.source-select-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.source-select-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.source-select-btn.active {
+  background: rgba(250, 45, 72, 0.2);
+  border-color: #fa2d48;
+  color: #ffffff;
+}
+
+.mxm-token-row {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mxm-token-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.mxm-token-input-group {
+  display: flex;
+  gap: 6px;
+}
+
+.mxm-token-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.mxm-token-input:focus {
+  border-color: #fa2d48;
+}
+
+.mxm-token-save-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mxm-token-save-btn:hover {
+  background: #fa2d48;
+  border-color: #fa2d48;
+  color: #ffffff;
+}
+
+.mxm-token-hint {
+  font-size: 8.5px;
+  color: var(--text-muted);
+  opacity: 0.75;
+  line-height: 1.3;
+}
+
+/* Theme overrides for retro themes */
+body.theme-oled .modal-card {
+  background: #000000;
+  border-color: #00ff7f;
+  box-shadow: 0 0 20px rgba(0, 255, 127, 0.2);
+}
+body.theme-oled .lyric-source-pill {
+  border-color: rgba(0, 255, 127, 0.3);
+}
+body.theme-oled .source-select-btn.active,
+body.theme-oled .btn-do-search {
+  background: #00ff7f;
+  color: #000000;
+}
+
+body.theme-win95 .modal-card {
+  background: #c0c0c0;
+  border: 2px outset #ffffff;
+  border-radius: 0;
+  color: #000000;
+}
+body.theme-win95 .modal-title,
+body.theme-win95 .candidate-title,
+body.theme-win95 .candidate-meta {
+  color: #000000;
+}
+body.theme-win95 .source-tab-btn,
+body.theme-win95 .source-select-btn,
+body.theme-win95 .btn-do-search,
+body.theme-win95 .lyric-source-pill {
+  border: 2px outset #ffffff;
+  border-radius: 0;
+  background: #c0c0c0;
+  color: #000000;
+}
+body.theme-win95 .source-tab-btn.active,
+body.theme-win95 .source-select-btn.active {
+  border: 2px inset #ffffff;
+  background: #000080;
+  color: #ffffff;
+}
+
 

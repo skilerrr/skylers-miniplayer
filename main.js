@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const readline = require('readline');
+const { LyricsManager } = require('./lyrics_manager');
+
+let lyricsManager = null;
 
 // Optimize Chromium resource and memory usage
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -349,203 +352,13 @@ async function fetchTrackAudioQuality(rawTrack, rawArtist) {
   return fallback;
 }
 
-// Synced Lyrics Fetcher with multi-strategy candidate verification and ranking
-async function fetchLyrics(rawTrack, rawArtist, duration) {
+// Synced & Multi-Source Lyrics Fetcher
+async function fetchLyrics(rawTrack, rawArtist, duration, preferredSource = 'auto') {
   if (!rawTrack || isTransientTrack(rawTrack)) return null;
-
   const track = cleanTrackName(rawTrack);
   const artist = cleanArtistName(rawArtist);
-  const durRound = duration && duration > 0 ? Math.round(duration) : 0;
-  
-  const cacheKey = `${track.toLowerCase()}|${artist.toLowerCase()}|${durRound}`;
-  if (lyricsCache.has(cacheKey)) {
-    return lyricsCache.get(cacheKey);
-  }
-
-  // 1. Check local custom .lrc file in lyrics/ directory first
-  const localLrc = findLocalLrc(rawTrack, rawArtist) || findLocalLrc(track, artist);
-  if (localLrc) {
-    const localResult = {
-      syncedLyrics: localLrc,
-      plainLyrics: null,
-      trackName: rawTrack,
-      artistName: rawArtist,
-      isLocal: true
-    };
-    lyricsCache.set(cacheKey, localResult);
-    return localResult;
-  }
-
-  const headers = { 'User-Agent': 'AppleMusicPixelMiniplayer/1.0' };
-  let fallbackPlain = null;
-
-  // 2. Strategy 1: Direct /api/get with exact duration match
-  if (durRound > 0) {
-    try {
-      const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}&duration=${durRound}`;
-      const res = await fetchWithTimeout(url, { headers }, 5000);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.syncedLyrics) {
-          const result = {
-            syncedLyrics: data.syncedLyrics,
-            plainLyrics: data.plainLyrics || null,
-            trackName: data.trackName,
-            artistName: data.artistName
-          };
-          lyricsCache.set(cacheKey, result);
-          return result;
-        } else if (data && data.plainLyrics && !fallbackPlain) {
-          fallbackPlain = {
-            syncedLyrics: null,
-            plainLyrics: data.plainLyrics,
-            trackName: data.trackName,
-            artistName: data.artistName
-          };
-        }
-      }
-    } catch (err) {}
-  }
-
-  // 3. Strategy 2: Direct /api/get without duration
-  try {
-    const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
-    const res = await fetchWithTimeout(url, { headers }, 5000);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.syncedLyrics) {
-        const durDelta = (durRound > 0 && data.duration > 0) ? Math.abs(data.duration - durRound) : 0;
-        if (durRound === 0 || durDelta <= 15) {
-          const result = {
-            syncedLyrics: data.syncedLyrics,
-            plainLyrics: data.plainLyrics || null,
-            trackName: data.trackName,
-            artistName: data.artistName
-          };
-          lyricsCache.set(cacheKey, result);
-          return result;
-        }
-      } else if (data && data.plainLyrics && !fallbackPlain) {
-        fallbackPlain = {
-          syncedLyrics: null,
-          plainLyrics: data.plainLyrics,
-          trackName: data.trackName,
-          artistName: data.artistName
-        };
-      }
-    }
-  } catch (err) {}
-
-  // 4. Strategy 3: Structured /api/search with track_name & artist_name params + Candidate Scoring
-  try {
-    const searchUrl = `https://lrclib.net/api/search?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
-    const res = await fetchWithTimeout(searchUrl, { headers }, 5500);
-    if (res.ok) {
-      const results = await res.json();
-      if (Array.isArray(results) && results.length > 0) {
-        const scored = results
-          .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
-          .filter(item => item.score >= 35)
-          .sort((a, b) => b.score - a.score);
-
-        const bestSynced = scored.find(item => item.r.syncedLyrics);
-        if (bestSynced) {
-          const result = {
-            syncedLyrics: bestSynced.r.syncedLyrics,
-            plainLyrics: bestSynced.r.plainLyrics || null,
-            trackName: bestSynced.r.trackName,
-            artistName: bestSynced.r.artistName
-          };
-          lyricsCache.set(cacheKey, result);
-          return result;
-        }
-
-        if (!fallbackPlain && scored.length > 0 && scored[0].r.plainLyrics) {
-          fallbackPlain = {
-            syncedLyrics: null,
-            plainLyrics: scored[0].r.plainLyrics,
-            trackName: scored[0].r.trackName,
-            artistName: scored[0].r.artistName
-          };
-        }
-      }
-    }
-  } catch (err) {}
-
-  // 5. Strategy 4: Fallback fuzzy query search ?q= with Candidate Scoring
-  try {
-    const searchQuery = `${track} ${artist}`.trim();
-    const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`;
-    const res = await fetchWithTimeout(searchUrl, { headers }, 5500);
-    if (res.ok) {
-      const results = await res.json();
-      if (Array.isArray(results) && results.length > 0) {
-        const scored = results
-          .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
-          .filter(item => item.score >= 35)
-          .sort((a, b) => b.score - a.score);
-
-        const bestSynced = scored.find(item => item.r.syncedLyrics);
-        if (bestSynced) {
-          const result = {
-            syncedLyrics: bestSynced.r.syncedLyrics,
-            plainLyrics: bestSynced.r.plainLyrics || null,
-            trackName: bestSynced.r.trackName,
-            artistName: bestSynced.r.artistName
-          };
-          lyricsCache.set(cacheKey, result);
-          return result;
-        }
-
-        if (!fallbackPlain && scored.length > 0 && scored[0].r.plainLyrics) {
-          fallbackPlain = {
-            syncedLyrics: null,
-            plainLyrics: scored[0].r.plainLyrics,
-            trackName: scored[0].r.trackName,
-            artistName: scored[0].r.artistName
-          };
-        }
-      }
-    }
-  } catch (err) {}
-
-  // 6. Strategy 5: If raw title is different from cleaned track, try search with raw title
-  if (rawTrack && rawTrack !== track) {
-    try {
-      const rawQuery = `${rawTrack} ${artist}`.trim();
-      const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(rawQuery)}`;
-      const res = await fetchWithTimeout(searchUrl, { headers }, 5000);
-      if (res.ok) {
-        const results = await res.json();
-        if (Array.isArray(results) && results.length > 0) {
-          const scored = results
-            .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
-            .filter(item => item.score >= 35)
-            .sort((a, b) => b.score - a.score);
-
-          const bestSynced = scored.find(item => item.r.syncedLyrics);
-          if (bestSynced) {
-            const result = {
-              syncedLyrics: bestSynced.r.syncedLyrics,
-              plainLyrics: bestSynced.r.plainLyrics || null,
-              trackName: bestSynced.r.trackName,
-              artistName: bestSynced.r.artistName
-            };
-            lyricsCache.set(cacheKey, result);
-            return result;
-          }
-        }
-      }
-    } catch (err) {}
-  }
-
-  // 7. If plain lyrics were found during any search stage, return them gracefully
-  if (fallbackPlain) {
-    lyricsCache.set(cacheKey, fallbackPlain);
-    return fallbackPlain;
-  }
-
-  return null;
+  if (!lyricsManager) lyricsManager = new LyricsManager(app);
+  return await lyricsManager.fetchLyrics(track, artist, duration, preferredSource);
 }
 
 // IPC Handlers
@@ -569,8 +382,6 @@ ipcMain.handle('toggle-always-on-top', () => {
   return false;
 });
 
-
-
 ipcMain.on('window-minimize', () => {
   if (mainWindow) mainWindow.minimize();
 });
@@ -591,8 +402,30 @@ ipcMain.on('window-resize', (_event, { width, height }) => {
   }
 });
 
-ipcMain.handle('fetch-lyrics', async (_event, { track, artist, duration }) => {
-  return await fetchLyrics(track, artist, duration);
+ipcMain.handle('fetch-lyrics', async (_event, { track, artist, duration, preferredSource }) => {
+  return await fetchLyrics(track, artist, duration, preferredSource);
+});
+
+ipcMain.handle('search-lyrics-candidates', async (_event, { query, track, artist, sourceFilter }) => {
+  if (!lyricsManager) lyricsManager = new LyricsManager(app);
+  const cleanT = cleanTrackName(track || '');
+  const cleanA = cleanArtistName(artist || '');
+  return await lyricsManager.searchCandidates(query, cleanT, cleanA, sourceFilter);
+});
+
+ipcMain.handle('fetch-lyric-candidate', async (_event, { candidate }) => {
+  if (!lyricsManager) lyricsManager = new LyricsManager(app);
+  return await lyricsManager.fetchCandidateLyrics(candidate);
+});
+
+ipcMain.handle('get-musixmatch-token', () => {
+  if (!lyricsManager) lyricsManager = new LyricsManager(app);
+  return lyricsManager.getMusixmatchToken();
+});
+
+ipcMain.handle('set-musixmatch-token', (_event, { token }) => {
+  if (!lyricsManager) lyricsManager = new LyricsManager(app);
+  return lyricsManager.setMusixmatchToken(token);
 });
 
 ipcMain.handle('fetch-quality', async (_event, { track, artist }) => {
@@ -602,6 +435,7 @@ ipcMain.handle('fetch-quality', async (_event, { track, artist }) => {
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 app.whenReady().then(() => {
+  lyricsManager = new LyricsManager(app);
   createWindow();
   startSmtcBridge();
 

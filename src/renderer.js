@@ -160,6 +160,38 @@ const ambientGlowLayer = document.getElementById('ambientGlowLayer');
 let isLiquidMeshEnabled = true;
 let isTypewriterEnabled = true;
 
+// Lyric Sources & Modal State
+let currentPreferredSource = 'auto'; // 'auto' | 'lrclib' | 'qq' | 'musixmatch' | 'local'
+try {
+  const savedSource = localStorage.getItem('miniplayer_lyrics_source');
+  if (savedSource) currentPreferredSource = savedSource;
+} catch (e) {}
+
+let activeLyricSource = 'Auto';
+let lastLoadedTrackName = '';
+let lastLoadedArtistName = '';
+let currentSearchFilter = 'all'; // 'all' | 'lrclib' | 'qq' | 'musixmatch' | 'local'
+let activeCandidateId = null;
+let currentCandidates = [];
+
+// New DOM Elements for Lyric Sources & Selection Modal
+const btnSourcePill = document.getElementById('btnSourcePill');
+const lyricSourceLabel = document.getElementById('lyricSourceLabel');
+const btnSearchLyrics = document.getElementById('btnSearchLyrics');
+const lyricsSourceModal = document.getElementById('lyricsSourceModal');
+const btnCloseLyricsModal = document.getElementById('btnCloseLyricsModal');
+const sourceTabsRow = document.getElementById('sourceTabsRow');
+const searchTrackInput = document.getElementById('searchTrackInput');
+const searchArtistInput = document.getElementById('searchArtistInput');
+const btnDoSearch = document.getElementById('btnDoSearch');
+const candidatesContainer = document.getElementById('candidatesContainer');
+const candidatesList = document.getElementById('candidatesList');
+const candidatesLoading = document.getElementById('candidatesLoading');
+const candidatesEmpty = document.getElementById('candidatesEmpty');
+const modalTrackSub = document.getElementById('modalTrackSub');
+const inputMxmToken = document.getElementById('inputMxmToken');
+const btnSaveMxmToken = document.getElementById('btnSaveMxmToken');
+
 // --- Helper: HTML Escape ---
 function escapeHtml(str) {
   return (str || '')
@@ -441,6 +473,19 @@ function parseLRC(lrcText) {
   return resultWithDots;
 }
 
+function updateSourcePillDisplay(sourceName) {
+  if (!lyricSourceLabel) return;
+  if (!sourceName) {
+    lyricSourceLabel.textContent = currentPreferredSource === 'auto' ? 'Lyrics: Auto' : currentPreferredSource.toUpperCase();
+    return;
+  }
+  if (currentPreferredSource === 'auto') {
+    lyricSourceLabel.textContent = `Auto: ${sourceName}`;
+  } else {
+    lyricSourceLabel.textContent = `${sourceName}`;
+  }
+}
+
 function renderLyricsList() {
   lyricsList.innerHTML = '';
   activeLyricIndex = -1;
@@ -450,16 +495,19 @@ function renderLyricsList() {
     lyricsPlaceholder.style.display = 'flex';
     lyricsList.style.display = 'none';
     lyricsContainer.classList.remove('has-synced', 'has-plain');
-    if (isPlaying) {
+    if (isPlaying || currentLyricsTrackKey) {
       lyricsPlaceholder.querySelector('p').textContent = 'No lyrics available';
-      lyricsPlaceholder.querySelector('.hint').textContent = 'Enjoy the music';
+      lyricsPlaceholder.querySelector('.hint').textContent = activeLyricSource ? `Checked: ${activeLyricSource}` : 'Try another source or search';
+      if (btnSearchLyrics) btnSearchLyrics.classList.remove('hidden');
     } else {
       lyricsPlaceholder.querySelector('p').textContent = 'Waiting for music...';
       lyricsPlaceholder.querySelector('.hint').textContent = 'Apple Music synced karaoke';
+      if (btnSearchLyrics) btnSearchLyrics.classList.add('hidden');
     }
     return;
   }
 
+  if (btnSearchLyrics) btnSearchLyrics.classList.add('hidden');
   lyricsPlaceholder.style.display = 'none';
   lyricsList.style.display = 'flex';
 
@@ -677,22 +725,28 @@ window.miniplayerAPI.onMediaUpdate((data) => {
     // Fetch lyrics for new track
     const fetchId = ++lyricsFetchCounter;
     currentLyricsTrackKey = trackKey;
+    lastLoadedTrackName = data.title;
+    lastLoadedArtistName = data.artist;
     hasSyncedLyrics = false;
     userScrollUntil = 0;
     activeLyricIndex = -1;
+    activeCandidateId = null;
     lyricsContainer.scrollTop = 0;
 
     lyricsPlaceholder.style.display = 'flex';
     lyricsList.style.display = 'none';
     lyricsPlaceholder.querySelector('p').textContent = 'Loading lyrics...';
-    lyricsPlaceholder.querySelector('.hint').textContent = 'Searching local & online databases';
+    lyricsPlaceholder.querySelector('.hint').textContent = `Searching ${currentPreferredSource === 'auto' ? 'databases' : currentPreferredSource.toUpperCase()}...`;
+    if (btnSearchLyrics) btnSearchLyrics.classList.add('hidden');
 
-    window.miniplayerAPI.fetchLyrics(data.title, data.artist, data.duration)
+    window.miniplayerAPI.fetchLyrics(data.title, data.artist, data.duration, currentPreferredSource)
       .then((res) => {
         if (fetchId !== lyricsFetchCounter) return;
         if (res && res.syncedLyrics) {
           parsedLyrics = parseLRC(res.syncedLyrics);
           hasSyncedLyrics = true;
+          activeLyricSource = res.source || 'Online';
+          updateSourcePillDisplay(activeLyricSource);
           renderLyricsList();
         } else if (res && res.plainLyrics) {
           parsedLyrics = res.plainLyrics
@@ -701,10 +755,14 @@ window.miniplayerAPI.onMediaUpdate((data) => {
             .filter(t => t.length > 0)
             .map(t => ({ time: -1, text: t, isDots: false }));
           hasSyncedLyrics = false;
+          activeLyricSource = res.source || 'Online';
+          updateSourcePillDisplay(activeLyricSource);
           renderLyricsList();
         } else {
           parsedLyrics = [];
           hasSyncedLyrics = false;
+          activeLyricSource = '';
+          updateSourcePillDisplay(currentPreferredSource === 'auto' ? 'Auto' : currentPreferredSource.toUpperCase());
           renderLyricsList();
         }
       })
@@ -712,17 +770,21 @@ window.miniplayerAPI.onMediaUpdate((data) => {
         if (fetchId !== lyricsFetchCounter) return;
         parsedLyrics = [];
         hasSyncedLyrics = false;
+        activeLyricSource = '';
+        updateSourcePillDisplay('Failed');
         renderLyricsList();
       });
   } else if (!hasSyncedLyrics && data.duration > 0 && currentDuration === 0 && data.title) {
     // If lyrics failed or loaded plain because duration was 0 initially, re-fetch once duration is known
     const fetchId = ++lyricsFetchCounter;
-    window.miniplayerAPI.fetchLyrics(data.title, data.artist, data.duration)
+    window.miniplayerAPI.fetchLyrics(data.title, data.artist, data.duration, currentPreferredSource)
       .then((res) => {
         if (fetchId !== lyricsFetchCounter) return;
         if (res && res.syncedLyrics) {
           parsedLyrics = parseLRC(res.syncedLyrics);
           hasSyncedLyrics = true;
+          activeLyricSource = res.source || 'Online';
+          updateSourcePillDisplay(activeLyricSource);
           renderLyricsList();
         }
       })
@@ -1138,6 +1200,10 @@ btnClose.addEventListener('click', () => {
 // Keyboard Shortcuts
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (lyricsSourceModal && !lyricsSourceModal.classList.contains('hidden')) {
+      closeLyricsSourceModal();
+      return;
+    }
     if (!themePopupMenu.classList.contains('hidden')) {
       themePopupMenu.classList.add('hidden');
       return;
@@ -1152,12 +1218,12 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'ArrowLeft' && e.ctrlKey) {
     window.miniplayerAPI.sendMediaCommand('prev');
   } else if (e.key === 't' || e.key === 'T') {
-    if (!e.ctrlKey && !e.metaKey) {
+    if (!e.ctrlKey && !e.metaKey && !e.target.closest('input, textarea')) {
       const nextIdx = (currentThemeIndex + 1) % THEMES.length;
       applyTheme(nextIdx);
     }
   } else if (e.key === 'm' || e.key === 'M') {
-    if (!e.ctrlKey && !e.metaKey) {
+    if (!e.ctrlKey && !e.metaKey && !e.target.closest('input, textarea')) {
       themePopupMenu.classList.toggle('hidden');
     }
   } else if (e.key === '[' || e.key === '{') {
@@ -1171,9 +1237,306 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// --- Multiple Lyrics Sources & Alternative Candidates Picker Handlers ---
+
+function refetchCurrentTrackLyrics() {
+  if (!lastLoadedTrackName) return;
+  const fetchId = ++lyricsFetchCounter;
+  hasSyncedLyrics = false;
+  userScrollUntil = 0;
+  activeLyricIndex = -1;
+  activeCandidateId = null;
+  lyricsContainer.scrollTop = 0;
+
+  lyricsPlaceholder.style.display = 'flex';
+  lyricsList.style.display = 'none';
+  lyricsPlaceholder.querySelector('p').textContent = 'Switching source...';
+  lyricsPlaceholder.querySelector('.hint').textContent = `Fetching from ${currentPreferredSource === 'auto' ? 'Smart Fallback' : currentPreferredSource.toUpperCase()}...`;
+  if (btnSearchLyrics) btnSearchLyrics.classList.add('hidden');
+
+  window.miniplayerAPI.fetchLyrics(lastLoadedTrackName, lastLoadedArtistName, currentDuration, currentPreferredSource)
+    .then((res) => {
+      if (fetchId !== lyricsFetchCounter) return;
+      if (res && res.syncedLyrics) {
+        parsedLyrics = parseLRC(res.syncedLyrics);
+        hasSyncedLyrics = true;
+        activeLyricSource = res.source || 'Online';
+        updateSourcePillDisplay(activeLyricSource);
+        renderLyricsList();
+      } else if (res && res.plainLyrics) {
+        parsedLyrics = res.plainLyrics
+          .split(/\r?\n/)
+          .map(t => t.trim())
+          .filter(t => t.length > 0)
+          .map(t => ({ time: -1, text: t, isDots: false }));
+        hasSyncedLyrics = false;
+        activeLyricSource = res.source || 'Online';
+        updateSourcePillDisplay(activeLyricSource);
+        renderLyricsList();
+      } else {
+        parsedLyrics = [];
+        hasSyncedLyrics = false;
+        activeLyricSource = '';
+        updateSourcePillDisplay(currentPreferredSource === 'auto' ? 'Auto' : currentPreferredSource.toUpperCase());
+        renderLyricsList();
+      }
+    })
+    .catch(() => {
+      if (fetchId !== lyricsFetchCounter) return;
+      parsedLyrics = [];
+      hasSyncedLyrics = false;
+      activeLyricSource = '';
+      updateSourcePillDisplay('Failed');
+      renderLyricsList();
+    });
+}
+
+function openLyricsSourceModal() {
+  if (!lyricsSourceModal) return;
+  lyricsSourceModal.classList.remove('hidden');
+
+  const curTrack = lastLoadedTrackName || trackTitleEl.textContent;
+  const curArtist = lastLoadedArtistName || trackSubtitleEl.textContent;
+
+  if (searchTrackInput) {
+    searchTrackInput.value = (curTrack && curTrack !== 'No Music Playing') ? curTrack : '';
+  }
+  if (searchArtistInput) {
+    searchArtistInput.value = (curArtist && curArtist !== 'Apple Music') ? curArtist : '';
+  }
+  if (modalTrackSub) {
+    modalTrackSub.textContent = (curTrack && curTrack !== 'No Music Playing') ? `${curTrack} — ${curArtist}` : 'Search lyrics across providers';
+  }
+
+  // Update active source tab
+  document.querySelectorAll('.source-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.source === currentSearchFilter);
+  });
+
+  // Run candidate search immediately
+  triggerCandidatesSearch();
+}
+
+function closeLyricsSourceModal() {
+  if (lyricsSourceModal) lyricsSourceModal.classList.add('hidden');
+}
+
+async function triggerCandidatesSearch() {
+  const track = (searchTrackInput ? searchTrackInput.value : '').trim();
+  const artist = (searchArtistInput ? searchArtistInput.value : '').trim();
+  const query = `${track} ${artist}`.trim();
+
+  if (!query) {
+    if (candidatesList) candidatesList.innerHTML = '';
+    if (candidatesLoading) candidatesLoading.classList.add('hidden');
+    if (candidatesEmpty) candidatesEmpty.classList.remove('hidden');
+    return;
+  }
+
+  if (candidatesLoading) candidatesLoading.classList.remove('hidden');
+  if (candidatesEmpty) candidatesEmpty.classList.add('hidden');
+  if (candidatesList) candidatesList.innerHTML = '';
+
+  try {
+    const candidates = await window.miniplayerAPI.searchLyricsCandidates(query, track, artist, currentSearchFilter);
+    currentCandidates = candidates || [];
+    renderCandidatesList(currentCandidates);
+  } catch (err) {
+    console.error('Candidate search error:', err);
+    currentCandidates = [];
+    renderCandidatesList([]);
+  } finally {
+    if (candidatesLoading) candidatesLoading.classList.add('hidden');
+  }
+}
+
+function renderCandidatesList(candidates) {
+  if (!candidatesList) return;
+  candidatesList.innerHTML = '';
+
+  if (!candidates || candidates.length === 0) {
+    if (candidatesEmpty) candidatesEmpty.classList.remove('hidden');
+    return;
+  }
+
+  if (candidatesEmpty) candidatesEmpty.classList.add('hidden');
+  const frag = document.createDocumentFragment();
+
+  candidates.forEach(cand => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'candidate-item';
+    if (cand.id === activeCandidateId) {
+      itemEl.classList.add('active');
+    }
+
+    const topRow = document.createElement('div');
+    topRow.className = 'candidate-top-row';
+
+    const badge = document.createElement('span');
+    badge.className = `candidate-source-badge badge-${cand.sourceKey || 'lrclib'}`;
+    badge.textContent = cand.source || 'LRCLIB';
+
+    const syncTag = document.createElement('span');
+    syncTag.className = `candidate-sync-tag ${cand.isSynced ? '' : 'plain'}`;
+    syncTag.textContent = cand.isSynced ? '✓ Synced' : 'Plain Text';
+
+    topRow.appendChild(badge);
+    topRow.appendChild(syncTag);
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'candidate-title';
+    titleEl.textContent = cand.trackName;
+
+    const metaRow = document.createElement('div');
+    metaRow.className = 'candidate-meta';
+    const artistSpan = document.createElement('span');
+    artistSpan.textContent = cand.artistName || 'Unknown';
+    const durSpan = document.createElement('span');
+    durSpan.textContent = cand.duration ? formatTime(cand.duration) : '';
+    metaRow.appendChild(artistSpan);
+    metaRow.appendChild(durSpan);
+
+    itemEl.appendChild(topRow);
+    itemEl.appendChild(titleEl);
+    itemEl.appendChild(metaRow);
+
+    if (cand.preview) {
+      const prevEl = document.createElement('div');
+      prevEl.className = 'candidate-preview';
+      prevEl.textContent = cand.preview;
+      itemEl.appendChild(prevEl);
+    }
+
+    // 1-Click candidate activation
+    itemEl.addEventListener('click', async () => {
+      itemEl.style.opacity = '0.6';
+      try {
+        const lyricRes = await window.miniplayerAPI.fetchLyricCandidate(cand);
+        if (lyricRes && lyricRes.syncedLyrics) {
+          parsedLyrics = parseLRC(lyricRes.syncedLyrics);
+          hasSyncedLyrics = true;
+          activeLyricSource = lyricRes.source || cand.source;
+          activeCandidateId = cand.id;
+          updateSourcePillDisplay(activeLyricSource);
+          renderLyricsList();
+          closeLyricsSourceModal();
+        } else if (lyricRes && lyricRes.plainLyrics) {
+          parsedLyrics = lyricRes.plainLyrics
+            .split(/\r?\n/)
+            .map(t => t.trim())
+            .filter(t => t.length > 0)
+            .map(t => ({ time: -1, text: t, isDots: false }));
+          hasSyncedLyrics = false;
+          activeLyricSource = lyricRes.source || cand.source;
+          activeCandidateId = cand.id;
+          updateSourcePillDisplay(activeLyricSource);
+          renderLyricsList();
+          closeLyricsSourceModal();
+        }
+      } catch (err) {
+        console.error('Error loading candidate:', err);
+      } finally {
+        itemEl.style.opacity = '1';
+      }
+    });
+
+    frag.appendChild(itemEl);
+  });
+
+  candidatesList.appendChild(frag);
+}
+
+// Modal Event Listeners
+if (btnSourcePill) {
+  btnSourcePill.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openLyricsSourceModal();
+  });
+}
+
+if (btnSearchLyrics) {
+  btnSearchLyrics.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openLyricsSourceModal();
+  });
+}
+
+if (btnCloseLyricsModal) {
+  btnCloseLyricsModal.addEventListener('click', () => {
+    closeLyricsSourceModal();
+  });
+}
+
+if (lyricsSourceModal) {
+  lyricsSourceModal.addEventListener('click', (e) => {
+    if (e.target === lyricsSourceModal) {
+      closeLyricsSourceModal();
+    }
+  });
+}
+
+// Source Provider Tabs inside Modal
+document.querySelectorAll('.source-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentSearchFilter = btn.dataset.source;
+    document.querySelectorAll('.source-tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    triggerCandidatesSearch();
+  });
+});
+
+// Search input and trigger in modal
+if (btnDoSearch) {
+  btnDoSearch.addEventListener('click', () => triggerCandidatesSearch());
+}
+if (searchTrackInput) {
+  searchTrackInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') triggerCandidatesSearch();
+  });
+}
+if (searchArtistInput) {
+  searchArtistInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') triggerCandidatesSearch();
+  });
+}
+
+// Settings Menu Default Source Buttons
+document.querySelectorAll('.source-select-btn').forEach(btn => {
+  btn.classList.toggle('active', btn.dataset.pref === currentPreferredSource);
+  btn.addEventListener('click', () => {
+    currentPreferredSource = btn.dataset.pref;
+    try {
+      localStorage.setItem('miniplayer_lyrics_source', currentPreferredSource);
+    } catch (e) {}
+    document.querySelectorAll('.source-select-btn').forEach(b => b.classList.toggle('active', b.dataset.pref === currentPreferredSource));
+    updateSourcePillDisplay(currentPreferredSource === 'auto' ? 'Auto' : currentPreferredSource.toUpperCase());
+    refetchCurrentTrackLyrics();
+  });
+});
+
+// Musixmatch Token in Settings Menu
+if (window.miniplayerAPI && window.miniplayerAPI.getMusixmatchToken) {
+  window.miniplayerAPI.getMusixmatchToken().then(tok => {
+    if (inputMxmToken && tok) inputMxmToken.value = tok;
+  }).catch(() => {});
+}
+
+if (btnSaveMxmToken) {
+  btnSaveMxmToken.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const tok = inputMxmToken ? inputMxmToken.value.trim() : '';
+    await window.miniplayerAPI.setMusixmatchToken(tok);
+    btnSaveMxmToken.textContent = 'Saved ✓';
+    setTimeout(() => { btnSaveMxmToken.textContent = 'Save'; }, 1500);
+    if (currentPreferredSource === 'musixmatch') {
+      refetchCurrentTrackLyrics();
+    }
+  });
+}
+
 // Initialize with Default Apple Music OG theme & display state
 applyTheme(0);
 drawDefaultPixelArt();
 updateDelayDisplay();
+updateSourcePillDisplay(currentPreferredSource === 'auto' ? 'Auto' : currentPreferredSource.toUpperCase());
 
 
