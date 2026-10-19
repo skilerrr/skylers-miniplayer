@@ -17,12 +17,6 @@ let mainWindow = null;
 let smtcProcess = null;
 let isAlwaysOnTop = true;
 
-// Icon app. Saat dev dipakai langsung dari build/icon.ico; di build ter-package
-// Windows ambil dari resource exe (lihat build.win.icon di package.json), jadi
-// kalau file-nya nggak ada (build/ nggak ikut masuk asar) ya nggak masalah.
-const appIconPath = path.join(__dirname, 'build', 'icon.ico');
-const appIcon = fs.existsSync(appIconPath) ? appIconPath : undefined;
-
 // Rebrand: folder userData ngikutin nama package, jadi data lama (config, riwayat lirik,
 // posisi window) bakal keliatan 'hilang' kalau nggak dipindah. Sekali migrasi, sebelum app ready.
 (() => {
@@ -104,7 +98,6 @@ function createWindow() {
     transparent: true,
     alwaysOnTop: isAlwaysOnTop,
     resizable: true,
-    icon: appIcon,
     hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
