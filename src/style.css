@@ -8,7 +8,7 @@
   --font-pixel-heading: 'Press Start 2P', monospace;
   --font-pixel-ui: 'Silkscreen', 'DotGothic16', monospace;
   --font-pixel-body: 'VT323', 'DotGothic16', monospace;
-  --font-cjk: 'DotGothic16', sans-serif;
+  --font-cjk: 'DotGothic16', 'Yu Gothic UI', Meiryo, 'MS Gothic', 'Malgun Gothic', 'Noto Sans CJK JP', sans-serif;
   --transition-smooth: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
   --transition-spring: 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.15);
 

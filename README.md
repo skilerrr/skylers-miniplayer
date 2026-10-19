@@ -28,6 +28,10 @@ Aesthetic, cute & retro pixel-art floating desktop miniplayer for **Apple Music*
 7. **Always-On-Top & Draggable**:
    - Bisa dipin di atas game / code editor / browser saat beraktivitas.
    - Window frameless bisa digeser bebas (`drag`).
+8. **100% Offline-Ready**:
+   - Semua font (`Plus Jakarta Sans`, `Press Start 2P`, `Silkscreen`, `VT323`, `DotGothic16`) dibundel lokal di `src/fonts/`.
+   - Nggak ada request ke Google Fonts / internet sama sekali dari UI — tampilan pixel tetap utuh walau koneksi mati.
+   - Renderer dikunci pakai Content-Security-Policy ketat (`default-src 'none'`).
 
 ---
 
@@ -73,3 +77,6 @@ Syntax-check `main.js`, `preload.js`, `lyrics_manager.js`, dan `src/renderer.js`
 - `src/index.html`: Retro pixel UI structure.
 - `src/style.css`: Pixel typography, CRT shader, dan 5 tema warna.
 - `src/renderer.js`: Real-time pixel canvas shader, LRC synced lyrics engine, dan timeline interpolation.
+- `lyrics_manager.js`: Multi-source provider lirik (Lokal / LRCLIB / QQ Music / Musixmatch) dengan budget waktu pencarian.
+- `src/fonts.css` + `src/fonts/`: Deklarasi @font-face & file font lokal (offline).
+- `AUDIT-2026-10-19.md`: Hasil audit performa + catatan apa saja yang sudah diberesin.

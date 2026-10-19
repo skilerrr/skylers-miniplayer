@@ -17,6 +17,11 @@ let mainWindow = null;
 let smtcProcess = null;
 let isAlwaysOnTop = true;
 
+// Cuma boleh satu instance jalan: dua miniplayer sekaligus rebutan folder cache Chromium
+// dan bikin error 'Unable to move the cache: Access is denied'.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) app.quit();
+
 // Posisi, ukuran, dan state pin dipersist ke userData biar nggak balik ke pojok tiap dibuka
 const windowStatePath = () => path.join(app.getPath('userData'), 'window_state.json');
 
@@ -241,7 +246,17 @@ ipcMain.handle('set-musixmatch-token', (_event, { token }) => {
   return lyricsManager.setMusixmatchToken(token);
 });
 
+app.on('second-instance', () => {
+  // User buka app lagi pas udah jalan: fokusin window yang ada, jangan bikin yang baru
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
   lyricsManager = new LyricsManager(app);
   createWindow();
   startSmtcBridge();

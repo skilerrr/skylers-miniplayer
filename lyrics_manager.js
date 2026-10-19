@@ -108,13 +108,40 @@ function mxmSubtitlesToLRC(subtitlesJson) {
   }
 }
 
+// Budget total buat satu pencarian mode 'auto'. Dulu worst case-nya ~45 detik
+// (LRCLIB 4 strategi + QQ search & 5 lagu + Musixmatch, semua berurutan).
+const AUTO_BUDGET_MS = 12000;
+
+// Batas entri cache lirik; Map jaga urutan insert jadi yang paling lama bisa dibuang
+const LYRICS_CACHE_MAX = 80;
+
 class LyricsManager {
   constructor(app) {
     this.app = app;
     this.lyricsCache = new Map();
+    this._deadline = 0;
     this.configPath = null;
     this.musixmatchToken = '';
     this.initToken();
+  }
+
+  // Sisa waktu budget buat pencarian yang sedang jalan (Infinity = tanpa batas)
+  _sisaWaktu() {
+    return this._deadline ? this._deadline - Date.now() : Infinity;
+  }
+
+  // Timeout per request dibatasi sisa budget biar nggak lewat dari deadline
+  _budget(ms) {
+    if (!this._deadline) return ms;
+    return Math.max(600, Math.min(ms, this._deadline - Date.now()));
+  }
+
+  // Cache dengan batas ukuran: buang entri paling lama pas udah penuh
+  _cacheHasil(key, value) {
+    this.lyricsCache.set(key, value);
+    while (this.lyricsCache.size > LYRICS_CACHE_MAX) {
+      this.lyricsCache.delete(this.lyricsCache.keys().next().value);
+    }
   }
 
   initToken() {
@@ -233,6 +260,27 @@ class LyricsManager {
     return results;
   }
 
+  // Ambil hasil search LRCLIB terbaik: utamakan yang punya syncedLyrics,
+  // sisanya baru plain. Dipakai Strategi C & D (dulu logikanya diduplikat).
+  _pickFromSearch(results, track, artist, durRound) {
+    if (!Array.isArray(results) || results.length === 0) return null;
+    const scored = results
+      .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
+      .filter(item => item.score >= 30)
+      .sort((a, b) => b.score - a.score);
+
+    const best = scored.find(item => item.r.syncedLyrics) || (scored[0] && scored[0].r.plainLyrics ? scored[0] : null);
+    if (!best) return null;
+    return {
+      syncedLyrics: best.r.syncedLyrics || null,
+      plainLyrics: best.r.plainLyrics || null,
+      trackName: best.r.trackName,
+      artistName: best.r.artistName,
+      source: 'LRCLIB',
+      sourceKey: 'lrclib'
+    };
+  }
+
   // 2. LRCLIB Provider
   async fetchFromLrclib(track, artist, duration) {
     const headers = { 'User-Agent': 'AppleMusicPixelMiniplayer/1.2 (https://github.com)' };
@@ -242,7 +290,7 @@ class LyricsManager {
     if (durRound > 0) {
       try {
         const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}&duration=${durRound}`;
-        const res = await fetchWithTimeout(url, { headers }, 4000);
+        const res = await fetchWithTimeout(url, { headers }, this._budget(4000));
         if (res.ok) {
           const data = await res.json();
           if (data && data.syncedLyrics) {
@@ -262,7 +310,7 @@ class LyricsManager {
     // Strategy B: Direct /api/get without duration
     try {
       const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`;
-      const res = await fetchWithTimeout(url, { headers }, 4000);
+      const res = await fetchWithTimeout(url, { headers }, this._budget(4000));
       if (res.ok) {
         const data = await res.json();
         if (data && data.syncedLyrics) {
@@ -281,64 +329,22 @@ class LyricsManager {
     // Strategy C: Search with track_name & candidate scoring
     try {
       const url = `https://lrclib.net/api/search?track_name=${encodeURIComponent(track)}`;
-      const res = await fetchWithTimeout(url, { headers }, 4500);
+      const res = await fetchWithTimeout(url, { headers }, this._budget(4500));
       if (res.ok) {
         const results = await res.json();
-        if (Array.isArray(results) && results.length > 0) {
-          const scored = results
-            .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
-            .filter(item => item.score >= 30)
-            .sort((a, b) => b.score - a.score);
-
-          const bestSynced = scored.find(item => item.r.syncedLyrics);
-          if (bestSynced) {
-            return {
-              syncedLyrics: bestSynced.r.syncedLyrics,
-              plainLyrics: bestSynced.r.plainLyrics || null,
-              trackName: bestSynced.r.trackName,
-              artistName: bestSynced.r.artistName,
-              source: 'LRCLIB',
-              sourceKey: 'lrclib'
-            };
-          }
-          if (scored.length > 0 && scored[0].r.plainLyrics) {
-            return {
-              syncedLyrics: null,
-              plainLyrics: scored[0].r.plainLyrics,
-              trackName: scored[0].r.trackName,
-              artistName: scored[0].r.artistName,
-              source: 'LRCLIB',
-              sourceKey: 'lrclib'
-            };
-          }
-        }
+        const picked = this._pickFromSearch(results, track, artist, durRound);
+        if (picked) return picked;
       }
     } catch (e) {}
 
     // Strategy D: Broad search ?q=track artist
     try {
       const url = `https://lrclib.net/api/search?q=${encodeURIComponent(`${track} ${artist}`.trim())}`;
-      const res = await fetchWithTimeout(url, { headers }, 4500);
+      const res = await fetchWithTimeout(url, { headers }, this._budget(4500));
       if (res.ok) {
         const results = await res.json();
-        if (Array.isArray(results) && results.length > 0) {
-          const scored = results
-            .map(r => ({ r, score: scoreCandidate(r, track, artist, durRound) }))
-            .filter(item => item.score >= 30)
-            .sort((a, b) => b.score - a.score);
-
-          const bestSynced = scored.find(item => item.r.syncedLyrics);
-          if (bestSynced) {
-            return {
-              syncedLyrics: bestSynced.r.syncedLyrics,
-              plainLyrics: bestSynced.r.plainLyrics || null,
-              trackName: bestSynced.r.trackName,
-              artistName: bestSynced.r.artistName,
-              source: 'LRCLIB',
-              sourceKey: 'lrclib'
-            };
-          }
-        }
+        const picked = this._pickFromSearch(results, track, artist, durRound);
+        if (picked) return picked;
       }
     } catch (e) {}
 
@@ -350,7 +356,7 @@ class LyricsManager {
     const candidates = [];
     try {
       const url = `https://lrclib.net/api/search?q=${encodeURIComponent(query)}`;
-      const res = await fetchWithTimeout(url, { headers }, 4500);
+      const res = await fetchWithTimeout(url, { headers }, this._budget(4500));
       if (res.ok) {
         const list = await res.json();
         if (Array.isArray(list)) {
@@ -395,7 +401,7 @@ class LyricsManager {
     try {
       const q = `${track} ${artist}`.trim();
       const sUrl = `https://c.y.qq.com/soso/fcgi-bin/client_search_cp?p=1&n=8&w=${encodeURIComponent(q)}&format=json`;
-      const sRes = await fetchWithTimeout(sUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, 4500);
+      const sRes = await fetchWithTimeout(sUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, this._budget(4500));
       if (!sRes.ok) return null;
       const data = await sRes.json();
       if (!data.data || !data.data.song || !Array.isArray(data.data.song.list) || data.data.song.list.length === 0) {
@@ -407,9 +413,10 @@ class LyricsManager {
 
       // Check first 5 candidates for synced lyrics
       for (const s of songList.slice(0, 5)) {
+        if (this._sisaWaktu() <= 600) break;
         try {
           const lUrl = `https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${s.songmid}&format=json&nobase64=1`;
-          const lRes = await fetchWithTimeout(lUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, 3500);
+          const lRes = await fetchWithTimeout(lUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, this._budget(2500));
           if (lRes.ok) {
             const lData = await lRes.json();
             const decoded = decodeEntities(lData.lyric || '');
@@ -449,7 +456,7 @@ class LyricsManager {
     const candidates = [];
     try {
       const sUrl = `https://c.y.qq.com/soso/fcgi-bin/client_search_cp?p=1&n=8&w=${encodeURIComponent(query)}&format=json`;
-      const sRes = await fetchWithTimeout(sUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, 4500);
+      const sRes = await fetchWithTimeout(sUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, this._budget(4500));
       if (!sRes.ok) return candidates;
       const data = await sRes.json();
       if (data.data && data.data.song && Array.isArray(data.data.song.list)) {
@@ -486,7 +493,7 @@ class LyricsManager {
 
     try {
       const url = `https://apic-desktop.musixmatch.com/ws/1.1/matcher.subtitle.get?app_id=web-desktop-app-v1.0&usertoken=${encodeURIComponent(token)}&q_track=${encodeURIComponent(track)}&q_artist=${encodeURIComponent(artist)}`;
-      const res = await fetchWithTimeout(url, {}, 4500);
+      const res = await fetchWithTimeout(url, {}, this._budget(4500));
       if (res.ok) {
         const data = await res.json();
         if (data.message && data.message.body && data.message.body.subtitle) {
@@ -509,7 +516,7 @@ class LyricsManager {
     // Fallback: Musixmatch matcher.lyrics.get (plain text)
     try {
       const url = `https://apic-desktop.musixmatch.com/ws/1.1/matcher.lyrics.get?app_id=web-desktop-app-v1.0&usertoken=${encodeURIComponent(token)}&q_track=${encodeURIComponent(track)}&q_artist=${encodeURIComponent(artist)}`;
-      const res = await fetchWithTimeout(url, {}, 4500);
+      const res = await fetchWithTimeout(url, {}, this._budget(4500));
       if (res.ok) {
         const data = await res.json();
         if (data.message && data.message.body && data.message.body.lyrics) {
@@ -556,7 +563,7 @@ class LyricsManager {
 
     try {
       const url = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&usertoken=${encodeURIComponent(token)}&q=${encodeURIComponent(query)}&page_size=8`;
-      const res = await fetchWithTimeout(url, {}, 4500);
+      const res = await fetchWithTimeout(url, {}, this._budget(4500));
       if (res.ok) {
         const data = await res.json();
         if (data.message && data.message.body && Array.isArray(data.message.body.track_list)) {
@@ -617,16 +624,17 @@ class LyricsManager {
       }
     }
 
-    // Sort: Synced candidates first, then by string similarity to target query
-    combined.sort((a, b) => {
-      if (a.isSynced && !b.isSynced) return -1;
-      if (!a.isSynced && b.isSynced) return 1;
-      const simA = stringSimilarity(a.trackName, track || q);
-      const simB = stringSimilarity(b.trackName, track || q);
-      return simB - simA;
+    // Sort: Synced dulu, terus paling mirip sama target.
+    // Skor kemiripan dihitung sekali per kandidat (dulu O(n log n) tiap pembanding).
+    const target = track || q;
+    const ranked = combined.map((c, i) => ({ c, i, sim: stringSimilarity(c.trackName, target) }));
+    ranked.sort((a, b) => {
+      if (a.c.isSynced !== b.c.isSynced) return a.c.isSynced ? -1 : 1;
+      if (b.sim !== a.sim) return b.sim - a.sim;
+      return a.i - b.i;
     });
 
-    return combined;
+    return ranked.map((x) => x.c);
   }
 
   // Fetch full lyrics for a selected candidate
@@ -661,7 +669,7 @@ class LyricsManager {
       if (mid) {
         try {
           const lUrl = `https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${mid}&format=json&nobase64=1`;
-          const lRes = await fetchWithTimeout(lUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, 4500);
+          const lRes = await fetchWithTimeout(lUrl, { headers: { 'Referer': 'https://y.qq.com/' } }, this._budget(4500));
           if (lRes.ok) {
             const lData = await lRes.json();
             const decoded = decodeEntities(lData.lyric || '');
@@ -683,7 +691,7 @@ class LyricsManager {
       if (token && trackId) {
         try {
           const url = `https://apic-desktop.musixmatch.com/ws/1.1/track.subtitle.get?app_id=web-desktop-app-v1.0&usertoken=${encodeURIComponent(token)}&track_id=${trackId}`;
-          const res = await fetchWithTimeout(url, {}, 4500);
+          const res = await fetchWithTimeout(url, {}, this._budget(4500));
           if (res.ok) {
             const data = await res.json();
             if (data.message && data.message.body && data.message.body.subtitle) {
@@ -705,7 +713,7 @@ class LyricsManager {
         // Fallback plain
         try {
           const url = `https://apic-desktop.musixmatch.com/ws/1.1/track.lyrics.get?app_id=web-desktop-app-v1.0&usertoken=${encodeURIComponent(token)}&track_id=${trackId}`;
-          const res = await fetchWithTimeout(url, {}, 4500);
+          const res = await fetchWithTimeout(url, {}, this._budget(4500));
           if (res.ok) {
             const data = await res.json();
             if (data.message && data.message.body && data.message.body.lyrics) {
@@ -752,42 +760,52 @@ class LyricsManager {
       result = await this.fetchFromMusixmatch(track, artist);
     } else {
       // 'auto' mode: Smart Fallback (Local -> LRCLIB -> QQ Music -> Musixmatch)
-      // 1. Check local
-      result = this.findLocalLrc(track, artist);
+      // Deadline dipasang biar track tanpa lirik nggak nyiksa 4 sumber sampai ~45 detik.
+      const prevDeadline = this._deadline;
+      this._deadline = Date.now() + AUTO_BUDGET_MS;
+      try {
+        // 1. Check local
+        result = this.findLocalLrc(track, artist);
 
-      // 2. Check LRCLIB
-      if (!result || !result.syncedLyrics) {
-        const lrclibRes = await this.fetchFromLrclib(track, artist, durRound);
-        if (lrclibRes && lrclibRes.syncedLyrics) {
-          result = lrclibRes;
-        } else if (lrclibRes && !result) {
-          result = lrclibRes; // save plain fallback
-        }
-      }
+        // Sumber berikutnya cuma jalan kalau belum dapet lirik sinkron DAN budget masih ada
+        const lanjut = () => (!result || !result.syncedLyrics) && this._sisaWaktu() > 800;
 
-      // 3. Check QQ Music (Outstanding for Asian & Western music synced lyrics)
-      if (!result || !result.syncedLyrics) {
-        const qqRes = await this.fetchFromQQ(track, artist, durRound);
-        if (qqRes && qqRes.syncedLyrics) {
-          result = qqRes;
-        } else if (qqRes && !result) {
-          result = qqRes;
+        // 2. Check LRCLIB
+        if (lanjut()) {
+          const lrclibRes = await this.fetchFromLrclib(track, artist, durRound);
+          if (lrclibRes && lrclibRes.syncedLyrics) {
+            result = lrclibRes;
+          } else if (lrclibRes && !result) {
+            result = lrclibRes; // save plain fallback
+          }
         }
-      }
 
-      // 4. Check Musixmatch (if configured)
-      if (!result || !result.syncedLyrics) {
-        const mxmRes = await this.fetchFromMusixmatch(track, artist);
-        if (mxmRes && mxmRes.syncedLyrics) {
-          result = mxmRes;
-        } else if (mxmRes && !result) {
-          result = mxmRes;
+        // 3. Check QQ Music (Outstanding for Asian & Western music synced lyrics)
+        if (lanjut()) {
+          const qqRes = await this.fetchFromQQ(track, artist, durRound);
+          if (qqRes && qqRes.syncedLyrics) {
+            result = qqRes;
+          } else if (qqRes && !result) {
+            result = qqRes;
+          }
         }
+
+        // 4. Check Musixmatch (if configured)
+        if (lanjut()) {
+          const mxmRes = await this.fetchFromMusixmatch(track, artist);
+          if (mxmRes && mxmRes.syncedLyrics) {
+            result = mxmRes;
+          } else if (mxmRes && !result) {
+            result = mxmRes;
+          }
+        }
+      } finally {
+        this._deadline = prevDeadline;
       }
     }
 
     if (result) {
-      this.lyricsCache.set(cacheKey, result);
+      this._cacheHasil(cacheKey, result);
     }
 
     return result;
