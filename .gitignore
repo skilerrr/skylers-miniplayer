@@ -1,6 +1,25 @@
+# Dependencies
 node_modules/
-dist/
-cover_temp.jpg
-.DS_Store
-*.log
 
+# Build output
+dist/
+out/
+release/
+*.exe
+
+# Local config & secrets
+.env
+.env.*
+*.local
+miniplayer_config.json
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs & scratch
+*.log
+scratch/
+cover_temp.jpg

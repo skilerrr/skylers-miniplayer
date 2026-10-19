@@ -1,7 +1,7 @@
 {
-  "name": "apple-music-pixel-miniplayer",
+  "name": "skylers-miniplayer",
   "version": "1.1.0",
-  "description": "Aesthetic Retro Pixelated Miniplayer for Apple Music and Windows Media",
+  "description": "Aesthetic retro-pixel and ambient-glass desktop miniplayer for Windows, powered by the Windows SMTC API (works with Apple Music, Spotify, browsers, and any other media app).",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -10,27 +10,32 @@
     "check": "node --check main.js && node --check preload.js && node --check lyrics_manager.js && node --check src/renderer.js"
   },
   "keywords": [
-    "apple-music",
     "miniplayer",
     "pixel-art",
     "retro",
     "lyrics",
-    "aesthetic"
+    "aesthetic",
+    "electron",
+    "windows",
+    "smtc"
   ],
-  "author": "skilerrr",
+  "author": "Dirya Ramadhan (skilerrr)",
   "license": "MIT",
   "build": {
-    "appId": "com.skilerrr.applemusicminiplayer",
-    "productName": "Apple Music Miniplayer",
+    "appId": "com.skilerrr.skylersminiplayer",
+    "productName": "Skyler's Miniplayer",
     "asar": true,
     "asarUnpack": [
       "smtc_bridge.ps1"
     ],
     "files": [
       "**/*",
+      "!.git/*",
+      "!.vscode/*",
+      "!docs/*",
+      "!*.md",
       "!test_*.ps1",
-      "!test_*.js",
-      "!.git/*"
+      "!test_*.js"
     ],
     "win": {
       "target": [
@@ -47,11 +52,19 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Apple Music Miniplayer"
+      "shortcutName": "Skyler's Miniplayer"
     }
   },
   "devDependencies": {
     "electron": "^31.3.1",
     "electron-builder": "^26.15.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skilerrr/skylers-miniplayer.git"
+  },
+  "homepage": "https://github.com/skilerrr/skylers-miniplayer#readme",
+  "bugs": {
+    "url": "https://github.com/skilerrr/skylers-miniplayer/issues"
   }
 }

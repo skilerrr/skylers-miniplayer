@@ -17,6 +17,23 @@ let mainWindow = null;
 let smtcProcess = null;
 let isAlwaysOnTop = true;
 
+// Rebrand: folder userData ngikutin nama package, jadi data lama (config, riwayat lirik,
+// posisi window) bakal keliatan 'hilang' kalau nggak dipindah. Sekali migrasi, sebelum app ready.
+(() => {
+  try {
+    const userDataDir = app.getPath('userData');
+    const legacyDir = path.join(path.dirname(userDataDir), 'apple-music-pixel-miniplayer');
+    const marker = path.join(userDataDir, 'miniplayer_config.json');
+    if (fs.existsSync(legacyDir) && !fs.existsSync(marker)) {
+      fs.mkdirSync(userDataDir, { recursive: true });
+      fs.cpSync(legacyDir, userDataDir, { recursive: true });
+      console.log('[migrasi] data lama dipindah dari', legacyDir);
+    }
+  } catch (err) {
+    console.warn('[migrasi] gagal, lanjut pakai data baru:', err.message);
+  }
+})();
+
 // Cuma boleh satu instance jalan: dua miniplayer sekaligus rebutan folder cache Chromium
 // dan bikin error 'Unable to move the cache: Access is denied'.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();

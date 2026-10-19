@@ -1,4 +1,4 @@
-# SMTC Bridge for Apple Music Aesthetic Miniplayer - Ultra-Low Latency & High Efficiency
+# SMTC Bridge for Skyler's Miniplayer - ultra-low latency, low-overhead Windows media bridge
 Add-Type -AssemblyName 'System.Runtime.WindowsRuntime'
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media, ContentType = WindowsRuntime] | Out-Null
 [Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null

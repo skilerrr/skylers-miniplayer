@@ -1,9 +1,9 @@
 // ==========================================================================
-// APPLE MUSIC OG HIERARCHY, ULTRA-SMOOTH 60FPS ENGINE - RENDERER
+// SKYLER'S MINIPLAYER - RENDERER (ambient-glass hierarchy + ultra-smooth 60fps engine)
 // ==========================================================================
 
 const THEMES = [
-  { id: 'theme-appleglass', label: 'Apple Music OG', isPixel: false },
+  { id: 'theme-glass', label: 'Ambient Glass', isPixel: false },
   { id: 'theme-gameboy', label: 'GameBoy', isPixel: true },
   { id: 'theme-pastel', label: 'Pastel Pop', isPixel: true },
   { id: 'theme-cyber', label: 'Cyber Lo-Fi', isPixel: true },
@@ -12,6 +12,9 @@ const THEMES = [
 ];
 
 // App State
+// Nama app (dipakai buat label fallback kalau metadata kosong)
+const APP_NAME = "Skyler's Miniplayer";
+
 let currentThemeIndex = 0;
 let is8BitDither = false;
 let isCrtEnabled = false;
@@ -279,7 +282,7 @@ function getDitherCanvas() {
   return { canvas: ditherCanvas, ctx: ditherCtx };
 }
 
-// --- True Dynamic 4-Tone Album Color Palette Extraction (Apple Music Liquid Mesh) ---
+// --- True Dynamic 4-Tone Album Color Palette Extraction (liquid mesh) ---
 function extractTrueAlbumColors(img) {
   try {
     const { ctx: cCtx } = getColorCanvas();
@@ -435,8 +438,7 @@ function renderCoverArt() {
 
 rawCoverImg.onload = () => renderCoverArt();
 
-// --- Robust LRC Synced Lyrics Engine with Apple Music Synced Three-Dots ---
-// --- Robust LRC Synced Lyrics Engine with Apple Music Synced Three-Dots ---
+// --- Robust LRC Synced Lyrics Engine with synced three-dots indicator ---
 function parseLRC(lrcText) {
   if (!lrcText) return [];
 
@@ -545,7 +547,7 @@ function renderLyricsList() {
       if (btnSearchLyrics) btnSearchLyrics.classList.remove('hidden');
     } else {
       lyricsPlaceholder.querySelector('p').textContent = 'Waiting for music...';
-      lyricsPlaceholder.querySelector('.hint').textContent = 'Apple Music synced karaoke';
+      lyricsPlaceholder.querySelector('.hint').textContent = 'Synced karaoke lyrics';
       if (btnSearchLyrics) btnSearchLyrics.classList.add('hidden');
     }
     return;
@@ -746,7 +748,7 @@ window.miniplayerAPI.onMediaUpdate((data) => {
     currentAlbumName = data.album || '';
     trackTitleEl.textContent = data.title || 'Unknown Track';
     
-    const subtitle = data.album ? `${data.artist || ''} — ${data.album}` : (data.artist || 'Apple Music');
+    const subtitle = data.album ? `${data.artist || ''} — ${data.album}` : (data.artist || APP_NAME);
     trackSubtitleEl.textContent = subtitle;
 
     if (currentContentView === 'history') {
@@ -1071,7 +1073,7 @@ function renderHistoryView() {
 
     const artistEl = document.createElement('div');
     artistEl.className = 'history-item-artist';
-    artistEl.textContent = item.artist || 'Apple Music';
+    artistEl.textContent = item.artist || APP_NAME;
 
     info.appendChild(titleEl);
     info.appendChild(artistEl);
@@ -1328,7 +1330,7 @@ function openLyricsSourceModal() {
     searchTrackInput.value = (curTrack && curTrack !== 'No Music Playing') ? curTrack : '';
   }
   if (searchArtistInput) {
-    searchArtistInput.value = (curArtist && curArtist !== 'Apple Music') ? curArtist : '';
+    searchArtistInput.value = (curArtist && curArtist !== APP_NAME) ? curArtist : '';
   }
   if (modalTrackSub) {
     modalTrackSub.textContent = (curTrack && curTrack !== 'No Music Playing') ? `${curTrack} — ${curArtist}` : 'Search lyrics across providers';
@@ -1559,7 +1561,7 @@ if (btnSaveMxmToken) {
   });
 }
 
-// Initialize with Default Apple Music OG theme & display state
+// Initialize with the default Ambient Glass theme & display state
 applyTheme(0);
 drawDefaultPixelArt();
 updateDelayDisplay();

@@ -1,82 +1,117 @@
-# 👾 Apple Music Pixel Retro Miniplayer (Windows)
+<div align="center">
 
-Aesthetic, cute & retro pixel-art floating desktop miniplayer for **Apple Music** (and other Windows media players) with real-time SMTC sync, live synced karaoke lyrics, pixelated dithering shader, and animated beat mascot.
+# Skyler's Miniplayer
 
----
+**A frameless, always-on-top desktop miniplayer for Windows** — retro-pixel and ambient-glass themes,
+synced karaoke lyrics, and a low-overhead native SMTC bridge that reads whatever Windows is playing.
 
-## ✨ Fitur Unggulan
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)
+![Electron](https://img.shields.io/badge/electron-31-47848f)
 
-1. **Auto Sync Tanpa Login Apple ID**:
-   - Terhubung langsung dengan Windows SMTC (System Media Transport Controls).
-   - Otomatis mendeteksi lagu Apple Music yang sedang berputar (Judul, Artis, Album, Durasi, Timeline, Cover Art).
-2. **Real-time Synced Karaoke Lyrics**:
-   - Lirik bergerak baris demi baris (LRC format) secara otomatis via LRCLIB database.
-   - Klik pada baris lirik mana saja untuk langsung seek/lompat ke detik tersebut!
-3. **5 Curated Retro Aesthetic Themes**:
-   - 🎮 **GameBoy Classic**: Nuansa 4-shade greenish matrix LCD nostalgia.
-   - 🌸 **Pastel Tamagotchi**: Cute candy pink & purple kawaii vibe.
-   - 🌌 **Cyber Lo-Fi**: Synthwave neon cyan & magenta glow.
-   - 🖥️ **Windows 95**: Classic OS beveled UI & retro buttons.
-   - 🖤 **OLED CRT Emerald**: Phosphor terminal green on pure black.
-4. **8-Bit Canvas Pixel Dither Shader**:
-   - Tombol `[👾 8-BIT / 🖼️ CLEAN]` untuk mengubah cover album asli menjadi pixel art retro realtime dengan palette quantizer.
-5. **CRT Scanlines Shader**:
-   - Tombol `[⚡ CRT]` untuk efek garis tabung kaca retro scanline.
-6. **Animated Beat Mascot & Equalizer**:
-   - Maskot pixel kucing `(⸝⸝•ᴗ•⸝⸝)♪` bergoyang mengikuti musik saat playing, dan tidur `₍-.-₎zZ` saat paused.
-   - Retro Equalizer VU Bars animatif.
-7. **Always-On-Top & Draggable**:
-   - Bisa dipin di atas game / code editor / browser saat beraktivitas.
-   - Window frameless bisa digeser bebas (`drag`).
-8. **100% Offline-Ready**:
-   - Semua font (`Plus Jakarta Sans`, `Press Start 2P`, `Silkscreen`, `VT323`, `DotGothic16`) dibundel lokal di `src/fonts/`.
-   - Nggak ada request ke Google Fonts / internet sama sekali dari UI — tampilan pixel tetap utuh walau koneksi mati.
-   - Renderer dikunci pakai Content-Security-Policy ketat (`default-src 'none'`).
+</div>
 
 ---
 
-## 🚀 Cara Menjalankan
+## Highlights
 
-Buka terminal di folder ini dan jalankan:
+- **Native SMTC bridge** — reads the current track (title, artist, album, duration, timeline, cover art) straight from the
+  Windows System Media Transport Controls API, so it works with *any* media app: Apple Music, Spotify, browsers, foobar2000, VLC.
+  No account, no login, no per-app integration.
+- **Six hand-tuned themes** — Ambient Glass (album-tinted glass, default), GameBoy, Pastel Pop, Cyber Lo-Fi, Win95 Retro, OLED Emerald.
+- **Synced karaoke lyrics** — LRC line-by-line highlighting, a three-dots marker on instrumental sections, and click any line to seek.
+  Sources are tried in order: local `.lrc` files, LRCLIB, QQ Music, then Musixmatch (optional user token).
+  A total search budget keeps a lyrics-less track from hanging the UI.
+- **Album art as ambient light** — a 4-tone palette is extracted from the cover and drives a liquid mesh gradient behind the UI.
+- **8-bit dither shader & CRT overlay** — one toggle turns the cover into palette-quantized pixel art, another adds scanlines.
+- **Animated beat mascot** — a pixel cat that bobs to the music and dozes off when paused.
+- **Playback history** — the last 40 tracks with lightweight 64 px cover thumbnails.
+- **Pinnable & draggable** — frameless window, drag anywhere, pin above games or editors. Position, size and pin state
+  persist across restarts.
+- **Offline-ready UI** — every font is bundled locally (no Google Fonts, no CDN); the renderer runs under a strict CSP
+  with `connect-src 'none'` because all data arrives over IPC.
+- **Single instance** — opening the app again just focuses the window that is already running.
+
+---
+
+## Requirements
+
+- Windows 10 or Windows 11 (x64)
+- Node.js 18+ (development only)
+
+---
+
+## Getting started
 
 ```bash
+npm install
 npm start
 ```
 
----
+### Scripts
 
-## ⌨️ Shortcut Keyboard
-
-- `Space`: Play / Pause toggle
-- `Ctrl + Right Arrow`: Next Track
-- `Ctrl + Left Arrow`: Previous Track
-- `T`: Ganti Theme (siklus 5 tema)
-- `M`: Buka / tutup popup menu tema
-- `[` / `]`: Geser timing offset lirik (-0.1s / +0.1s)
-- `Esc`: Tutup modal dialog / popup yang sedang kebuka
-
-> Posisi, ukuran window, dan state `Always on Top` otomatis kesimpan — app balik ke tempat terakhir kamu naruh dia.
+| Script | What it does |
+| --- | --- |
+| `npm start` | Run the app |
+| `npm run check` | Syntax-check `main.js`, `preload.js`, `lyrics_manager.js`, `src/renderer.js` |
+| `npm run build` | Build the Windows NSIS installer into `dist/` |
 
 ---
 
-## 🧪 Cek Kesehatan Kode
+## Keyboard shortcuts
 
-```bash
-npm run check
+- `Space` — play / pause
+- `Ctrl + Right Arrow` — next track
+- `Ctrl + Left Arrow` — previous track
+- `T` — cycle through themes
+- `M` — open / close the theme popup menu
+- `[` / `]` — nudge the lyric timing offset (-0.1 s / +0.1 s)
+- `Esc` — close the open popup or dialog
+
+---
+
+## Custom lyrics
+
+Drop `.lrc` files into the `lyrics/` folder next to the executable (see `lyrics/README.txt`). A local match always wins
+over any online source. Supported file names: `Title.lrc`, `Artist - Title.lrc`, `Title - Artist.lrc`.
+
+---
+
+## Project structure
+
+```
+main.js            Electron main process, window state, IPC bridge
+preload.js         Context-isolated API exposed to the renderer
+lyrics_manager.js  Multi-source lyrics providers (local / LRCLIB / QQ Music / Musixmatch)
+smtc_bridge.ps1    PowerShell SMTC polling bridge (stdout -> main process)
+src/index.html     UI markup
+src/style.css      Themes, pixel typography, CRT / mesh effects
+src/renderer.js    Canvas shader, lyric engine, timeline interpolation
+src/fonts.css      @font-face declarations for the bundled fonts
+src/fonts/         Bundled font files (offline)
+docs/              Performance audit and engineering notes
+lyrics/            Drop your own .lrc files here
 ```
 
-Syntax-check `main.js`, `preload.js`, `lyrics_manager.js`, dan `src/renderer.js`.
+---
+
+## Performance notes
+
+The app started as a heavier prototype; the current revision cuts the bridge IPC payload by ~99.9 %,
+shrinks stored playback history by ~99 %, and removes network dependencies from the UI.
+Measurements, method and the full change log live in [`docs/PERFORMANCE-AUDIT.md`](docs/PERFORMANCE-AUDIT.md).
 
 ---
 
-## 📁 Struktur File
+## Disclaimer
 
-- `main.js`: Electron main process & IPC listener.
-- `preload.js`: Bridge aman antara Node & Webview.
-- `smtc_bridge.ps1`: Daemon Windows SMTC background loop.
-- `src/index.html`: Retro pixel UI structure.
-- `src/style.css`: Pixel typography, CRT shader, dan 5 tema warna.
-- `src/renderer.js`: Real-time pixel canvas shader, LRC synced lyrics engine, dan timeline interpolation.
-- `lyrics_manager.js`: Multi-source provider lirik (Lokal / LRCLIB / QQ Music / Musixmatch) dengan budget waktu pencarian.
-- `src/fonts.css` + `src/fonts/`: Deklarasi @font-face & file font lokal (offline).
-- `AUDIT-2026-10-19.md`: Hasil audit performa + catatan apa saja yang sudah diberesin.
+This is an independent open-source project. It is **not affiliated with, endorsed by, or sponsored by Apple Inc.**,
+and it ships no Apple code, assets or trademark. "Apple Music" and other product names are trademarks of their
+respective owners and are used here only to describe interoperability (the app reads any Windows media session
+through the public SMTC API). All artwork rendered in the UI comes from your own local media sessions.
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 Dirya Ramadhan (skilerrr)

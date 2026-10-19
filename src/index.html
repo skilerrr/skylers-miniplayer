@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Renderer ini nggak butuh akses jaringan sama sekali: script, style, dan font semua lokal -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Apple Music Aesthetic Miniplayer</title>
+  <title>Skyler's Miniplayer</title>
   <!-- Font dibundel lokal di src/fonts/ -> jalan penuh offline, nggak ada request ke Google Fonts -->
   <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="theme-appleglass">
+<body class="theme-glass">
   <!-- CRT Screen Overlay (Active when toggled in retro themes) -->
   <div class="crt-overlay disabled" id="crtOverlay"></div>
 
   <!-- Main Container Card (Solid 100% Opaque, Edge-to-Edge Rounded, No Outer Drop Shadow) -->
   <div class="miniplayer-container" id="miniplayerContainer">
-    <!-- Apple Music iOS 17 Animated Liquid Mesh Gradient Aura -->
+    <!-- iOS-style animated liquid mesh gradient aura -->
     <div class="ambient-glow-layer" id="ambientGlowLayer">
       <div class="mesh-fluid-blob mesh-blob-1" id="glowOrb1"></div>
       <div class="mesh-fluid-blob mesh-blob-2" id="glowOrb2"></div>
@@ -38,7 +38,7 @@
           <div class="title-row">
             <h1 class="header-title" id="trackTitle">No Music Playing</h1>
           </div>
-          <h2 class="header-subtitle" id="trackSubtitle">Apple Music</h2>
+          <h2 class="header-subtitle" id="trackSubtitle">Skyler's Miniplayer</h2>
         </div>
       </div>
 
@@ -66,7 +66,7 @@
           <div class="lyrics-placeholder" id="lyricsPlaceholder">
             <div class="music-notes">♫ ♪ ♫</div>
             <p>Waiting for lyrics...</p>
-            <span class="hint">Apple Music synced karaoke</span>
+            <span class="hint">Synced karaoke lyrics</span>
             <button class="btn-search-lyrics hidden" id="btnSearchLyrics">🔍 Select Source / Search</button>
           </div>
           <div class="lyrics-list" id="lyricsList"></div>
@@ -155,8 +155,8 @@
           <div class="section-label">THEME STYLE</div>
           <div class="theme-options-grid">
             <button class="theme-option-btn active" data-theme="0">
-              <span class="theme-dot dot-appleglass"></span>
-              <span class="theme-name">Apple Music OG</span>
+              <span class="theme-dot dot-glass"></span>
+              <span class="theme-name">Ambient Glass</span>
             </button>
             <button class="theme-option-btn" data-theme="1">
               <span class="theme-dot dot-gameboy"></span>

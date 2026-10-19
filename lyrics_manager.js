@@ -283,7 +283,7 @@ class LyricsManager {
 
   // 2. LRCLIB Provider
   async fetchFromLrclib(track, artist, duration) {
-    const headers = { 'User-Agent': 'AppleMusicPixelMiniplayer/1.2 (https://github.com)' };
+    const headers = { 'User-Agent': 'SkylersMiniplayer/1.2 (+https://github.com/skilerrr/skylers-miniplayer)' };
     const durRound = duration && duration > 0 ? Math.round(duration) : 0;
 
     // Strategy A: Direct /api/get with exact duration
@@ -352,7 +352,7 @@ class LyricsManager {
   }
 
   async searchLrclibCandidates(query) {
-    const headers = { 'User-Agent': 'AppleMusicPixelMiniplayer/1.2 (https://github.com)' };
+    const headers = { 'User-Agent': 'SkylersMiniplayer/1.2 (+https://github.com/skilerrr/skylers-miniplayer)' };
     const candidates = [];
     try {
       const url = `https://lrclib.net/api/search?q=${encodeURIComponent(query)}`;

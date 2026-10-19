@@ -1,5 +1,5 @@
 /* ==========================================================================
-   APPLE MUSIC OG HIERARCHY, ACCURATE ALBUM AMBIENT & RETRO THEMES
+   AMBIENT GLASS HIERARCHY, ACCURATE ALBUM AMBIENT & RETRO THEMES
    ========================================================================== */
 
 /* --- Fonts & Base Tokens --- */
@@ -20,9 +20,9 @@
 }
 
 /* ==========================================================================
-   1. THEME: APPLE MUSIC OG (SOLID OPAQUE, DYNAMIC ALBUM TINT)
+   1. THEME: AMBIENT GLASS (SOLID OPAQUE, DYNAMIC ALBUM TINT)
    ========================================================================== */
-body.theme-appleglass {
+body.theme-glass {
   --font-main: var(--font-modern);
   --bg-color: var(--color-dark);
   --card-bg: var(--color-dark);
@@ -182,7 +182,7 @@ body.theme-oled .miniplayer-container {
   box-shadow: none !important;
 }
 
-/* Apple Music iOS 17 Animated Liquid Mesh Gradient */
+/* iOS-style animated liquid mesh gradient */
 .ambient-glow-layer {
   position: absolute;
   top: 0;
@@ -198,7 +198,7 @@ body.theme-oled .miniplayer-container {
   will-change: opacity, transform;
 }
 
-body.theme-appleglass .ambient-glow-layer {
+body.theme-glass .ambient-glow-layer {
   opacity: 0.65;
 }
 
@@ -668,7 +668,7 @@ body.theme-appleglass .ambient-glow-layer {
   width: 100%;
 }
 
-/* Inactive Lyric Line (Apple Music Soft Faded Grey) */
+/* Inactive lyric line (soft faded grey) */
 .lyric-line {
   font-size: 20px;
   font-weight: 700;
@@ -761,7 +761,7 @@ body.theme-pastel .lyric-line.active .untyped-text {
   color: rgba(123, 44, 191, 0.3);
 }
 
-/* Three Dots Instrumental Line (Stable Apple Music Styling) */
+/* Three-dots instrumental line (stable styling) */
 .lyric-dots {
   display: flex !important;
   align-items: center;
@@ -806,7 +806,7 @@ body.theme-pastel .lyric-line.active .untyped-text {
 }
 
 /* Retro themes typography override */
-body:not(.theme-appleglass) .lyric-line {
+body:not(.theme-glass) .lyric-line {
   font-family: var(--font-pixel-body), var(--font-cjk);
   font-size: 19px;
   font-weight: normal;
@@ -814,7 +814,7 @@ body:not(.theme-appleglass) .lyric-line {
   opacity: 0.45;
 }
 
-body:not(.theme-appleglass) .lyric-line.active {
+body:not(.theme-glass) .lyric-line.active {
   font-size: 20px;
   font-weight: bold;
   opacity: 1;
@@ -863,7 +863,7 @@ body:not(.theme-appleglass) .lyric-line.active {
 }
 
 /* ==========================================================================
-   3. BOTTOM APP CONTROLS FOOTER: Clean Unified White Apple Music Controls
+   3. BOTTOM APP CONTROLS FOOTER: clean unified white controls
    ========================================================================== */
 .app-controls-footer {
   display: flex;
@@ -942,7 +942,7 @@ body:not(.theme-appleglass) .lyric-line.active {
   height: 5px;
 }
 
-/* Buttons Row - Clean Seamless Apple Music Style */
+/* Buttons row - clean seamless glass style */
 .buttons-row {
   display: flex;
   justify-content: space-between;
@@ -1131,7 +1131,7 @@ body:not(.theme-appleglass) .lyric-line.active {
   display: inline-block;
 }
 
-.dot-appleglass { background: #fa243c; }
+.dot-glass { background: #fa243c; }
 .dot-gameboy { background: #8bac0f; }
 .dot-pastel { background: #ff758f; }
 .dot-cyber { background: #ff007f; }
