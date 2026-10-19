@@ -1,4 +1,4 @@
-# Miniplayer Aesthetic — Audit Teknis (19 Okt 2026)
+# Skyler's Miniplayer — Performance Audit & Change Log (19 Oct 2026)
 
 Semua temuan di bawah diverifikasi langsung dari source + runtime (bukan tebakan). Ukuran source: 5.674 baris
 (`src/renderer.js` 1542, `src/style.css` 2123, `lyrics_manager.js` 802, `main.js` 457, `smtc_bridge.ps1` 273,
