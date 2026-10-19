@@ -89,14 +89,62 @@ let currentTrackCover = '';
 try {
   const savedHistory = localStorage.getItem('miniplayer_playback_history');
   if (savedHistory) {
-    playbackHistory = JSON.parse(savedHistory);
+    const parsed = JSON.parse(savedHistory);
+    if (Array.isArray(parsed)) playbackHistory = parsed;
   }
 } catch (e) {}
 
+const HISTORY_COVER_PX = 64;      // kartu history cuma 38px, thumbnail sekecil ini udah lebih dari cukup
+const HISTORY_COVER_MAX = 20000;  // hard cap: cover lebih gede dari ini nggak boleh masuk storage
+
+// Cover dari bridge itu ~190 KB data-URI; disimpen 40x bikin localStorage bengkak 15 MB.
+// Kecilin ke JPEG 64px sebelum disimpen.
+function shrinkCover(dataUrl) {
+  return new Promise((resolve) => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) return resolve('');
+    if (dataUrl.length <= 6000) return resolve(dataUrl);
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = HISTORY_COVER_PX;
+        c.height = HISTORY_COVER_PX;
+        c.getContext('2d').drawImage(im, 0, 0, HISTORY_COVER_PX, HISTORY_COVER_PX);
+        resolve(c.toDataURL('image/jpeg', 0.72));
+      } catch (err) {
+        resolve('');
+      }
+    };
+    im.onerror = () => resolve('');
+    im.src = dataUrl;
+  });
+}
+
 function saveHistoryToStorage() {
   try {
-    localStorage.setItem('miniplayer_playback_history', JSON.stringify(playbackHistory.slice(0, 40)));
+    const slim = playbackHistory.slice(0, 40).map((item) => {
+      if (item && typeof item.cover === 'string' && item.cover.length > HISTORY_COVER_MAX) {
+        return Object.assign({}, item, { cover: '' });
+      }
+      return item;
+    });
+    localStorage.setItem('miniplayer_playback_history', JSON.stringify(slim));
   } catch (e) {}
+}
+
+// Migrasi sekali jalan: entry lama yang nyimpen cover full-size dikecilin, terus storage ditulis ulang.
+async function shrinkHistoryCovers() {
+  let dirty = false;
+  for (const item of playbackHistory) {
+    if (item && typeof item.cover === 'string' && item.cover.length > 6000) {
+      item.cover = await shrinkCover(item.cover);
+      dirty = true;
+    }
+  }
+  if (dirty) saveHistoryToStorage();
+  if (typeof currentContentView !== 'undefined' && currentContentView === 'history' && typeof renderHistoryView === 'function') {
+    renderHistoryView();
+  }
 }
 
 // Cached Formatted Strings (Avoids unnecessary DOM text mutations in RAF loop)
@@ -113,7 +161,6 @@ const ctx = pixelCanvas.getContext('2d');
 
 const trackTitleEl = document.getElementById('trackTitle');
 const trackSubtitleEl = document.getElementById('trackSubtitle');
-const explicitBadge = document.getElementById('explicitBadge');
 const timeCurrentEl = document.getElementById('timeCurrent');
 const timeRemainingEl = document.getElementById('timeRemaining');
 const progressBarFill = document.getElementById('progressBarFill');
@@ -130,9 +177,6 @@ const btnPin = document.getElementById('btnPin');
 const btnMin = document.getElementById('btnMin');
 const btnClose = document.getElementById('btnClose');
 
-const badgeRow = document.getElementById('badgeRow');
-const badgeIcon = document.getElementById('badgeIcon');
-const badgeLabel = document.getElementById('badgeLabel');
 const crtOverlay = document.getElementById('crtOverlay');
 
 const lyricsViewArea = document.getElementById('lyricsViewArea');
@@ -689,6 +733,12 @@ window.miniplayerAPI.onMediaUpdate((data) => {
         playbackHistory.unshift(historyEntry);
         if (playbackHistory.length > 40) playbackHistory.pop();
         saveHistoryToStorage();
+        shrinkCover(historyEntry.cover).then((small) => {
+          if (small && small !== historyEntry.cover) {
+            historyEntry.cover = small;
+            saveHistoryToStorage();
+          }
+        });
       }
     }
 
@@ -703,25 +753,6 @@ window.miniplayerAPI.onMediaUpdate((data) => {
       renderHistoryView();
     }
     
-    // Fetch live audio quality (1:1 Apple Music badge display)
-    window.miniplayerAPI.fetchQuality(data.title, data.artist)
-      .then((q) => {
-        if (q) {
-          const isLossless = q.isLossless !== false;
-          if (badgeRow) {
-            badgeRow.style.display = isLossless ? 'inline-flex' : 'none';
-          }
-          if (badgeLabel) {
-            badgeLabel.textContent = q.quality || 'Lossless';
-          }
-          if (badgeIcon) {
-            badgeIcon.textContent = q.quality === 'Dolby Atmos' ? '∿' : '≋';
-          }
-          explicitBadge.style.display = q.explicit ? 'inline-block' : 'none';
-        }
-      })
-      .catch(() => {});
-
     // Fetch lyrics for new track
     const fetchId = ++lyricsFetchCounter;
     currentLyricsTrackKey = trackKey;
@@ -833,11 +864,6 @@ window.miniplayerAPI.onMediaUpdate((data) => {
       currentPosition = data.position || 0;
       lastTickTime = now;
     }
-  }
-
-  // Volume sync from SMTC
-  if (typeof data.volume === 'number') {
-    currentVolume = data.volume;
   }
 
   if (isPlaying) {
@@ -1539,4 +1565,5 @@ drawDefaultPixelArt();
 updateDelayDisplay();
 updateSourcePillDisplay(currentPreferredSource === 'auto' ? 'Auto' : currentPreferredSource.toUpperCase());
 
-
+// Migrasi satu kali: cover history lama (190 KB/entry) dikecilin jadi thumbnail 64px
+shrinkHistoryCovers();

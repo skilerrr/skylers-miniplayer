@@ -12,25 +12,66 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-breakpad');
 app.commandLine.appendSwitch('disable-component-update');
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128');
 
 let mainWindow = null;
 let smtcProcess = null;
 let isAlwaysOnTop = true;
-const lyricsCache = new Map();
-const qualityCache = new Map();
+
+// Posisi, ukuran, dan state pin dipersist ke userData biar nggak balik ke pojok tiap dibuka
+const windowStatePath = () => path.join(app.getPath('userData'), 'window_state.json');
+
+function loadWindowState() {
+  try {
+    const st = JSON.parse(fs.readFileSync(windowStatePath(), 'utf-8'));
+    return st && typeof st === 'object' ? st : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+let windowStateTimer = null;
+function saveWindowState() {
+  clearTimeout(windowStateTimer);
+  windowStateTimer = setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      const bounds = mainWindow.getBounds();
+      fs.writeFileSync(windowStatePath(), JSON.stringify({
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        alwaysOnTop: isAlwaysOnTop
+      }));
+    } catch (e) {}
+  }, 400);
+}
+
+// Jangan restore ke koordinat monitor yang udah dicabut
+function isBoundsVisible(bounds) {
+  if (typeof bounds.x !== 'number' || typeof bounds.y !== 'number') return false;
+  return screen.getAllDisplays().some((display) => {
+    const a = display.workArea;
+    return bounds.x + 80 > a.x && bounds.x < a.x + a.width - 80 &&
+           bounds.y >= a.y - 4 && bounds.y < a.y + a.height - 60;
+  });
+}
 
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+  const saved = loadWindowState();
+  const restore = isBoundsVisible(saved);
+
+  if (typeof saved.alwaysOnTop === 'boolean') isAlwaysOnTop = saved.alwaysOnTop;
 
   mainWindow = new BrowserWindow({
-    width: 380,
-    height: 580,
+    width: saved.width || 380,
+    height: saved.height || 580,
     minWidth: 230,
     minHeight: 110,
-    x: Math.max(0, screenWidth - 410),
-    y: Math.max(0, screenHeight - 610),
+    x: restore ? saved.x : Math.max(0, screenWidth - 410),
+    y: restore ? saved.y : Math.max(0, screenHeight - 610),
     frame: false,
     transparent: true,
     alwaysOnTop: isAlwaysOnTop,
@@ -40,14 +81,17 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
       backgroundThrottling: false
     }
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
+  mainWindow.on('moved', saveWindowState);
+  mainWindow.on('resize', saveWindowState);
+
   mainWindow.on('closed', () => {
+    clearTimeout(windowStateTimer);
     mainWindow = null;
   });
 }
@@ -67,24 +111,12 @@ function startSmtcBridge() {
     terminal: false
   });
 
-  let lastPayloadStr = '';
-
   rl.on('line', (line) => {
     if (!line || !line.trim()) return;
     try {
       const lineTrim = line.trim();
       const data = JSON.parse(lineTrim);
       if (data && data.type === 'media_update') {
-        const coverTempPath = path.join(app.getPath('temp'), 'apple_music_miniplayer_cover.jpg');
-        if (data.trackChanged && fs.existsSync(coverTempPath)) {
-          try {
-            const buf = fs.readFileSync(coverTempPath);
-            data.cover = `data:image/jpeg;base64,${buf.toString('base64')}`;
-          } catch (err) {
-            console.error('Error reading cover image:', err);
-          }
-        }
-
         if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
           try {
             mainWindow.webContents.send('media-update', data);
@@ -109,36 +141,6 @@ function sendSmtcCommand(cmd) {
   if (smtcProcess && smtcProcess.stdin && !smtcProcess.stdin.destroyed) {
     smtcProcess.stdin.write(cmd + '\n');
   }
-}
-
-// Local .lrc file finder helper (prioritizes user's custom synced lyrics)
-function findLocalLrc(track, artist) {
-  try {
-    const candidateDirs = [
-      path.join(__dirname, 'lyrics'),
-      path.join(path.dirname(process.execPath), 'lyrics'),
-      path.join(app.getPath('userData'), 'lyrics')
-    ];
-
-    const cleanT = (track || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cleanA = (artist || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    for (const lyricsDir of candidateDirs) {
-      if (!fs.existsSync(lyricsDir)) continue;
-      const files = fs.readdirSync(lyricsDir);
-      for (const f of files) {
-        if (!f.toLowerCase().endsWith('.lrc')) continue;
-        const fBase = f.replace(/\.lrc$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (fBase === cleanT || fBase === `${cleanA}${cleanT}` || fBase === `${cleanT}${cleanA}`) {
-          const fullPath = path.join(lyricsDir, f);
-          return fs.readFileSync(fullPath, 'utf-8');
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Error reading local lyrics:', err);
-  }
-  return null;
 }
 
 // Clean Track & Artist names helper
@@ -176,182 +178,6 @@ function isTransientTrack(title) {
   return t.startsWith('connecting') || t.startsWith('buffering') || t.startsWith('loading') || t === 'unknown track';
 }
 
-// String similarity calculator for candidate verification (Dice Bigram)
-function stringSimilarity(str1, str2) {
-  const s1 = (str1 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const s2 = (str2 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!s1 && !s2) return 1.0;
-  if (!s1 || !s2) return 0;
-  if (s1 === s2) return 1.0;
-  if (s1.includes(s2) || s2.includes(s1)) return 0.88;
-
-  const getBigrams = (str) => {
-    const bigrams = new Set();
-    for (let i = 0; i < str.length - 1; i++) {
-      bigrams.add(str.substring(i, i + 2));
-    }
-    return bigrams;
-  };
-  const b1 = getBigrams(s1);
-  const b2 = getBigrams(s2);
-  let intersection = 0;
-  for (const b of b1) {
-    if (b2.has(b)) intersection++;
-  }
-  return (2.0 * intersection) / (b1.size + b2.size || 1);
-}
-
-// Candidate scoring algorithm to eliminate wrong song / wrong video lyrics
-function scoreCandidate(candidate, targetTrack, targetArtist, targetDuration) {
-  if (!candidate) return -999;
-  if (candidate.instrumental) return -999;
-  if (!candidate.syncedLyrics && !candidate.plainLyrics) return -999;
-
-  let score = 0;
-
-  // Synced lyrics heavily prioritized
-  if (candidate.syncedLyrics) score += 60;
-  else score += 15;
-
-  const trackSim = stringSimilarity(candidate.trackName || candidate.name, targetTrack);
-  const artistSim = stringSimilarity(candidate.artistName, targetArtist);
-
-  // If track name is too dissimilar (< 30% match), reject
-  if (trackSim < 0.30) return -999;
-
-  score += trackSim * 60;
-  score += artistSim * 30;
-
-  // Duration proximity scoring (avoids music video versions with video intros)
-  if (targetDuration > 0 && candidate.duration > 0) {
-    const diff = Math.abs(candidate.duration - targetDuration);
-    if (diff <= 2) score += 40;
-    else if (diff <= 5) score += 30;
-    else if (diff <= 10) score += 15;
-    else if (diff <= 20) score -= 10;
-    else score -= Math.min(50, diff * 2);
-  }
-
-  // Penalize video/dialogue versions
-  const candName = ((candidate.trackName || '') + ' ' + (candidate.name || '')).toLowerCase();
-  if (candName.includes('official video') || candName.includes('music video') || candName.includes('video version')) {
-    score -= 40;
-  }
-
-  return score;
-}
-
-// Fetch with AbortController timeout helper
-async function fetchWithTimeout(url, options = {}, timeoutMs = 3500) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(id);
-    return res;
-  } catch (err) {
-    clearTimeout(id);
-    throw err;
-  }
-}
-
-// Known Hi-Res master discographies / albums / artists (24-bit 96k / 192k / 88.2k)
-const HI_RES_96K_KEYWORDS = [
-  'coldplay', 'a head full of dreams', 'parachutes', 'ghost stories', 'everyday life', 'music of the spheres', 'rush of blood to the head',
-  'sadrah', 'barasuara', 'jalaran sadrah',
-  'daft punk', 'random access memories',
-  'eagles', 'hotel california',
-  'steely dan', 'aja', 'gaucho',
-  'hans zimmer', 'interstellar', 'dune', 'inception',
-  'pink floyd', 'dark side of the moon', 'the wall', 'wish you were here',
-  'the beatles', 'abbey road', 'let it be', 'sgt. pepper', 'revolver',
-  'led zeppelin', 'led zeppelin iv', 'physical graffiti',
-  'fleetwood mac', 'rumours',
-  'queen', 'a night at the opera',
-  'muse', 'origin of symmetry', 'absolution',
-  'radiohead', 'ok computer', 'kid a', 'in rainbows',
-  'green day', 'american idiot', 'dookie',
-  'nirvana', 'nevermind', 'in utero',
-  'foo fighters', 'wasting light',
-  'rush', 'moving pictures', '2112',
-  'iron maiden', 'senjutsu', 'number of the beast',
-  'neil young', 'harvest', 'after the gold rush',
-  'miles davis', 'kind of blue',
-  'john coltrane', 'a love supreme', 'blue train',
-  'norah jones', 'come away with me',
-  'diana krall', 'the look of love',
-  'finneas', 'optimist',
-  'dire straits', 'brothers in arms',
-  'eric clapton', 'unplugged',
-  'beck', 'sea change', 'morning phase',
-  'metallica', 'master of puppets', 'black album'
-];
-
-// Known Dolby Atmos / Spatial Audio mixes on Apple Music
-const DOLBY_ATMOS_KEYWORDS = [
-  'blinding lights', 'after hours', 'dawn fm', 'midnights', 'future nostalgia',
-  'when we all fall asleep', 'hit me hard and soft', 'eternal sunshine', 'guts', 'sour',
-  'chromatica', 'renaissance', 'cowboy carter', 'lover', 'folklore', 'evermore',
-  'bohemian rhapsody', 'levitating', 'spatial', 'atmos'
-];
-
-// Live Track Audio Quality Catalog Fetcher with Accurate Apple Music Lossless & Dolby Atmos Tiers
-async function fetchTrackAudioQuality(rawTrack, rawArtist) {
-  if (!rawTrack || isTransientTrack(rawTrack)) return null;
-  const track = cleanTrackName(rawTrack);
-  const artist = cleanArtistName(rawArtist);
-  const key = `${track.toLowerCase()}|${artist.toLowerCase()}`;
-
-  if (qualityCache.has(key)) return qualityCache.get(key);
-
-  try {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(track + ' ' + artist)}&entity=song&limit=1`;
-    const res = await fetchWithTimeout(url, {}, 3000);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.results && data.results.length > 0) {
-        const item = data.results[0];
-        const colName = (item.collectionName || '').toLowerCase();
-        const artName = (item.artistName || '').toLowerCase();
-        const trkName = (item.trackName || '').toLowerCase();
-
-        const isDolbyAtmos = DOLBY_ATMOS_KEYWORDS.some(k => trkName.includes(k) || colName.includes(k));
-        const isHiRes = HI_RES_96K_KEYWORDS.some(k => trkName.includes(k) || artName.includes(k) || colName.includes(k));
-
-        let quality = 'Lossless';
-        let isLossless = false;
-
-        if (item.isStreamable) {
-          isLossless = true;
-          if (isDolbyAtmos) {
-            quality = 'Dolby Atmos';
-          } else if (isHiRes) {
-            quality = 'Hi-Res Lossless';
-          } else {
-            quality = 'Lossless';
-          }
-        }
-
-        const result = {
-          quality,
-          isLossless,
-          explicit: item.trackExplicitness === 'explicit'
-        };
-        qualityCache.set(key, result);
-        return result;
-      }
-    }
-  } catch (err) {}
-
-  const fallback = {
-    quality: 'Lossless',
-    isLossless: true,
-    explicit: false
-  };
-  qualityCache.set(key, fallback);
-  return fallback;
-}
-
 // Synced & Multi-Source Lyrics Fetcher
 async function fetchLyrics(rawTrack, rawArtist, duration, preferredSource = 'auto') {
   if (!rawTrack || isTransientTrack(rawTrack)) return null;
@@ -369,14 +195,13 @@ ipcMain.on('media-command', (_event, { command, args }) => {
   else if (command === 'next') sendSmtcCommand('NEXT');
   else if (command === 'prev') sendSmtcCommand('PREV');
   else if (command === 'seek') sendSmtcCommand(`SEEK ${args}`);
-  else if (command === 'set-volume') sendSmtcCommand(`SET_VOLUME ${args}`);
-  else if (command === 'change-volume') sendSmtcCommand(`CHANGE_VOLUME ${args}`);
 });
 
 ipcMain.handle('toggle-always-on-top', () => {
   if (mainWindow) {
     isAlwaysOnTop = !isAlwaysOnTop;
     mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
+    saveWindowState();
     return isAlwaysOnTop;
   }
   return false;
@@ -388,18 +213,6 @@ ipcMain.on('window-minimize', () => {
 
 ipcMain.on('window-close', () => {
   if (mainWindow) mainWindow.close();
-});
-
-ipcMain.on('window-resize', (_event, { width, height }) => {
-  if (mainWindow) {
-    const currentBounds = mainWindow.getBounds();
-    mainWindow.setBounds({
-      x: currentBounds.x,
-      y: currentBounds.y + (currentBounds.height - height),
-      width: width,
-      height: height
-    });
-  }
 });
 
 ipcMain.handle('fetch-lyrics', async (_event, { track, artist, duration, preferredSource }) => {
@@ -428,12 +241,6 @@ ipcMain.handle('set-musixmatch-token', (_event, { token }) => {
   return lyricsManager.setMusixmatchToken(token);
 });
 
-ipcMain.handle('fetch-quality', async (_event, { track, artist }) => {
-  return await fetchTrackAudioQuality(track, artist);
-});
-
-ipcMain.handle('get-app-version', () => app.getVersion());
-
 app.whenReady().then(() => {
   lyricsManager = new LyricsManager(app);
   createWindow();
@@ -454,4 +261,3 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
-

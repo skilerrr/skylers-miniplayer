@@ -6,16 +6,8 @@ Add-Type -AssemblyName 'System.Runtime.WindowsRuntime'
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$coverFilePath = Join-Path ([System.IO.Path]::GetTempPath()) "apple_music_miniplayer_cover.jpg"
-
-# Compile AppVolumeHelper for independent Apple Music volume control
-$volumeHelperPath = Join-Path $scriptDir "AppVolumeHelper.cs"
-if (Test-Path $volumeHelperPath) {
-    try {
-        Add-Type -Path $volumeHelperPath -ErrorAction SilentlyContinue
-    } catch {}
-}
+# System.Drawing is used to downscale the SMTC thumbnail before it crosses stdout
+Add-Type -AssemblyName System.Drawing
 
 # Cache AsTask Reflection Methods once at startup (prevents heavy reflection in loops)
 $extType = [System.WindowsRuntimeSystemExtensions]
@@ -93,7 +85,6 @@ function GetActiveMediaSession($mgr) {
 
 $lastTrackKey = ""
 $lastCoverPath = ""
-$lastEmittedState = ""
 
 while ($true) {
     # 1. Process queued commands instantly
@@ -126,24 +117,6 @@ while ($true) {
                                 $sec = [double]::Parse($cmdParts[1], [System.Globalization.CultureInfo]::InvariantCulture)
                                 $ticks = [long]($sec * 10000000)
                                 $null = AwaitTaskFast ($session.TryChangePlaybackPositionAsync($ticks)) $boolType
-                            } catch {}
-                        }
-                    }
-                    "SET_VOLUME" {
-                        if ($cmdParts.Length -gt 1) {
-                            try {
-                                $v = [float]::Parse($cmdParts[1], [System.Globalization.CultureInfo]::InvariantCulture)
-                                [AudioMixer.AppVolumeController]::SetVolume("AppleMusic", $v) | Out-Null
-                            } catch {}
-                        }
-                    }
-                    "CHANGE_VOLUME" {
-                        if ($cmdParts.Length -gt 1) {
-                            try {
-                                $delta = [float]::Parse($cmdParts[1], [System.Globalization.CultureInfo]::InvariantCulture)
-                                $cur = [AudioMixer.AppVolumeController]::GetVolume("AppleMusic")
-                                $target = [Math]::Max(0.0, [Math]::Min(1.0, $cur + $delta))
-                                [AudioMixer.AppVolumeController]::SetVolume("AppleMusic", $target) | Out-Null
                             } catch {}
                         }
                     }
@@ -200,11 +173,11 @@ while ($true) {
             
             $trackKey = "$title|$artist|$album|$dur"
             $coverUpdated = $false
-            $coverUrl = $lastCoverPath
+            $coverUrl = ""
 
-            # If track changed, extract thumbnail to file
+            # Extract the thumbnail ONCE per track change and downscale it to 100px JPEG
+            # (raw SMTC art is ~190 KB base64 and used to be re-sent every 150 ms)
             if ($trackKey -ne $lastTrackKey -or (-not $lastCoverPath -and $title)) {
-                $coverUrl = ""
                 if ($props -and $props.Thumbnail) {
                     try {
                         $streamOp = $props.Thumbnail.OpenReadAsync()
@@ -216,21 +189,37 @@ while ($true) {
                             $bytes = $ms.ToArray()
                             $ms.Dispose()
                             if ($bytes.Length -gt 0) {
-                                $b64 = [Convert]::ToBase64String($bytes)
+                                $thumbBytes = $null
+                                try {
+                                    $srcStream = New-Object System.IO.MemoryStream(, $bytes)
+                                    $srcBmp = [System.Drawing.Image]::FromStream($srcStream)
+                                    $tw = 100
+                                    $th = [int][Math]::Round($srcBmp.Height * $tw / $srcBmp.Width)
+                                    if ($th -lt 1) { $th = $tw }
+                                    $thumbBmp = New-Object System.Drawing.Bitmap($tw, $th, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+                                    $gfx = [System.Drawing.Graphics]::FromImage($thumbBmp)
+                                    $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                                    $gfx.DrawImage($srcBmp, 0, 0, $tw, $th)
+                                    $gfx.Dispose()
+                                    $outMs = New-Object System.IO.MemoryStream
+                                    $thumbBmp.Save($outMs, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+                                    $thumbBytes = $outMs.ToArray()
+                                    $outMs.Dispose()
+                                    $thumbBmp.Dispose()
+                                    $srcBmp.Dispose()
+                                    $srcStream.Dispose()
+                                } catch { $thumbBytes = $null }
+                                if (-not $thumbBytes -or $thumbBytes.Length -eq 0) { $thumbBytes = $bytes }
+                                $b64 = [Convert]::ToBase64String($thumbBytes)
                                 $coverUrl = "data:image/jpeg;base64,$b64"
+                                $lastCoverPath = $coverUrl
+                                $coverUpdated = $true
                             }
                         }
                     } catch {}
                 }
-                $lastCoverPath = $coverUrl
                 $lastTrackKey = $trackKey
-                $coverUpdated = $true
             }
-
-            $appVolume = 1.0
-            try {
-                $appVolume = [AudioMixer.AppVolumeController]::GetVolume("AppleMusic")
-            } catch {}
 
             # Emit state update JSON
             $outObj = @{
@@ -241,9 +230,8 @@ while ($true) {
                 status = $currentStatus
                 position = $pos
                 duration = $dur
-                cover = $coverUrl
+                cover = $(if ($coverUpdated) { $coverUrl } else { "" })
                 trackChanged = $coverUpdated
-                volume = [Math]::Round($appVolume, 2)
             }
 
             Write-Output (ConvertTo-Json $outObj -Compress)
@@ -258,7 +246,6 @@ while ($true) {
                 duration = 0
                 cover = ""
                 trackChanged = $false
-                volume = 1.0
             }
             Write-Output (ConvertTo-Json $outObj -Compress)
         }

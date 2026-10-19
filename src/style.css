@@ -388,16 +388,6 @@ body.theme-appleglass .ambient-glow-layer {
   letter-spacing: -0.2px;
 }
 
-.explicit-badge {
-  background: rgba(255, 255, 255, 0.2);
-  color: var(--text-primary);
-  font-size: 9px;
-  font-weight: 800;
-  padding: 1px 4px;
-  border-radius: 3px;
-  line-height: 1;
-}
-
 .header-subtitle {
   font-size: 12px;
   font-weight: 600;
@@ -405,39 +395,6 @@ body.theme-appleglass .ambient-glow-layer {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Live Audio Quality Badge (Interactive Apple Music Style) */
-.audio-badge-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  cursor: pointer;
-  width: fit-content;
-  padding: 2px 6px;
-  margin-left: -6px;
-  border-radius: 6px;
-  transition: all var(--transition-fast);
-  user-select: none;
-}
-
-.audio-badge-row:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-}
-
-.audio-badge-row:hover .badge-icon {
-  transform: scale(1.15);
-}
-
-.badge-icon {
-  font-size: 12px;
-  color: var(--color-secondary, #fa243c);
-  font-weight: bold;
-  transition: transform var(--transition-fast);
 }
 
 /* Header Window Actions */
@@ -664,29 +621,6 @@ body.theme-appleglass .ambient-glow-layer {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   padding-left: 6px;
-}
-
-/* Collapsed Compact View Mode (Super Rapet & Clean, Height 156px) */
-body.lyrics-collapsed .app-header {
-  padding: 10px 14px 2px 14px;
-}
-
-body.lyrics-collapsed .art-thumb-box {
-  width: 52px;
-  height: 52px;
-  min-width: 52px;
-  min-height: 52px;
-}
-
-body.lyrics-collapsed .content-view-area {
-  display: none !important;
-}
-
-body.lyrics-collapsed .app-controls-footer {
-  border-top: none;
-  background: transparent;
-  padding: 2px 14px 10px 14px;
-  gap: 6px;
 }
 
 .lyrics-scroll-container {
@@ -1322,73 +1256,6 @@ body:not(.theme-appleglass) .lyric-line.active {
 }
 
 /* ==========================================================================
-   APPLE MUSIC VOLUME HUD OVERLAY
-   ========================================================================== */
-.volume-hud-overlay {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%) translateY(0);
-  z-index: 1000;
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
-  will-change: opacity, transform;
-}
-
-.volume-hud-overlay.hidden {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-10px);
-  pointer-events: none;
-}
-
-.volume-hud-card {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: rgba(22, 22, 26, 0.88);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  padding: 6px 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-}
-
-.volume-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  opacity: 0.9;
-}
-
-.volume-bar-track {
-  width: 80px;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.volume-bar-fill {
-  width: 100%;
-  height: 100%;
-  background: #ffffff;
-  border-radius: 3px;
-  transition: width 0.08s ease-out;
-}
-
-.volume-percent {
-  font-size: 11px;
-  font-weight: 700;
-  color: #ffffff;
-  min-width: 32px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ==========================================================================
    RESPONSIVE COMPACT & ULTRA-NARROW WINDOW LAYOUTS (< 300px, < 250px, < 220px)
    ========================================================================== */
 @media (max-width: 300px) {
@@ -1410,12 +1277,6 @@ body:not(.theme-appleglass) .lyric-line.active {
 
   .header-subtitle {
     font-size: 11px;
-  }
-
-  .audio-badge-row {
-    font-size: 10px;
-    padding: 1px 4px;
-    margin-left: -4px;
   }
 
   .app-controls-footer {

@@ -46,8 +46,22 @@ npm start
 - `Space`: Play / Pause toggle
 - `Ctrl + Right Arrow`: Next Track
 - `Ctrl + Left Arrow`: Previous Track
-- `T`: Ganti Theme (Gameboy -> Pastel -> Cyber -> Win95 -> OLED)
-- `V`: Ganti View Mode (Split View -> Lyrics Focus -> Mini Compact)
+- `T`: Ganti Theme (siklus 5 tema)
+- `M`: Buka / tutup popup menu tema
+- `[` / `]`: Geser timing offset lirik (-0.1s / +0.1s)
+- `Esc`: Tutup modal dialog / popup yang sedang kebuka
+
+> Posisi, ukuran window, dan state `Always on Top` otomatis kesimpan — app balik ke tempat terakhir kamu naruh dia.
+
+---
+
+## 🧪 Cek Kesehatan Kode
+
+```bash
+npm run check
+```
+
+Syntax-check `main.js`, `preload.js`, `lyrics_manager.js`, dan `src/renderer.js`.
 
 ---
 

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "build": "electron-builder --win --x64"
+    "build": "electron-builder --win --x64",
+    "check": "node --check main.js && node --check preload.js && node --check lyrics_manager.js && node --check src/renderer.js"
   },
   "keywords": [
     "apple-music",
@@ -16,21 +17,19 @@
     "lyrics",
     "aesthetic"
   ],
-  "author": "Antigravity",
+  "author": "skilerrr",
   "license": "MIT",
   "build": {
     "appId": "com.skilerrr.applemusicminiplayer",
     "productName": "Apple Music Miniplayer",
     "asar": true,
     "asarUnpack": [
-      "smtc_bridge.ps1",
-      "AppVolumeHelper.cs"
+      "smtc_bridge.ps1"
     ],
     "files": [
       "**/*",
       "!test_*.ps1",
       "!test_*.js",
-      "!cover_temp.jpg",
       "!.git/*"
     ],
     "win": {
