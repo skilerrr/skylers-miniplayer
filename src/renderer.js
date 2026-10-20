@@ -154,6 +154,7 @@ async function shrinkHistoryCovers() {
 let lastCurrentTimeStr = '';
 let lastRemainingTimeStr = '';
 let lastPercent = -1;
+let lastPercentAt = 0;
 
 // DOM Elements
 const bodyEl = document.body;
@@ -913,8 +914,13 @@ function updateProgressBar() {
   }
 
   const percent = currentDuration > 0 ? (displayPos / currentDuration) * 100 : 0;
-  if (Math.abs(percent - lastPercent) > 0.01) {
+  // Hemat: tulis style cuma kalau perubahannya bakal kelihatan. Ambang 0.1% = 0.4px di bar 400px,
+  // plus guard 100ms. Sebelumnya ambang 0.01% => praktis nulis width+left tiap frame (60x/detik),
+  // dan tiap tulisan itu invalidasi layout + maksa container blur mesh di-raster ulang.
+  const percentAt = performance.now();
+  if (Math.abs(percent - lastPercent) > 0.1 || percentAt - lastPercentAt > 100) {
     lastPercent = percent;
+    lastPercentAt = percentAt;
     progressBarFill.style.width = `${percent}%`;
     progressBarThumb.style.left = `${percent}%`;
   }
@@ -923,6 +929,11 @@ function updateProgressBar() {
     updateActiveLyric(displayPos);
   }
 }
+
+// Hemat daya: hentikan animasi mesh saat window nggak keliatan (minimize/ketutup).
+document.addEventListener('visibilitychange', () => {
+  bodyEl.classList.toggle('mesh-paused', document.hidden);
+});
 
 // 60FPS requestAnimationFrame tick loop
 function animationLoop() {

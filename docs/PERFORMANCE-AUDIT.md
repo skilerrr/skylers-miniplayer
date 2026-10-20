@@ -187,3 +187,41 @@ Klaim tebakan keyword dihapus total: markup badge, CSS, handler `fetch-quality`,
 3. **Skoring hasil search diduplikat + boros CPU.** Blok scoring yang sama persis ada di Strategi C dan D LRCLIB (~48 baris) - disatukan jadi `_pickFromSearch()`. Sort kandidat di `searchCandidates()` dulu manggil `stringSimilarity` di dalam comparator (O(n log n) hitungan bigram berulang) - sekarang skor dihitung sekali per kandidat (decorate-sort-undecorate), hasil urutan tetap sama.
 
 Catatan: bug "respons lirik nyasar ke track lain" **tidak ada** - renderer udah punya guard `lyricsFetchCounter`. Yang gw perbaiki cuma latency, memori, dan duplikasi.
+
+
+---
+
+## STATUS: PERF PASS — BIAYA RENDER PER FRAME (20 Oct 2026)
+
+Dipicu pertanyaan "bisa lebih ringan lagi nggak?". Semua angka di bawah hasil ukur di app yang **beneran
+jalan sambil muter lagu** (sesi SMTC nyata lewat `smtc_bridge.ps1`), bukan dari baca kode. Alat ukur:
+CDP (`Performance`/`rAF` sampling) + `TotalProcessorTime` per proses lewat PowerShell, jendela probe
+diparkir di (40,40) + topmost supaya Chromium nggak nge-throttle frame ke 1 fps (default app
+`alwaysOnTop: true` bikin probe ketutup -> semua angka jadi palsu kalau nggak diakalin).
+
+### 10. Yang MAHAL ternyata bukan blur-nya, tapi animasi isi container blur - BERES
+- Kenyataan awal (Task Manager + ukur): renderer **41,6% CPU + GPU 36%** pas muter, 212 MB RAM. Pas idle cuma **~1,4%** (rAF 1 fps, heap 9,5 MB, 1 canvas) - jadi idle-nya sehat, bebannya murni pas playing.
+- Isolasi: `State A` (idle + mesh + blur jalan) = **65% renderer + 58% GPU** untuk animasi doang. Begitu **semua** animasi CSS dimatiin, turun ke **6,8% / 3,7%** = lantai window kosong. Artinya: mesh + blur itu ~seluruh biaya render per frame.
+- Blur-nya sendiri bukan biang: `filter: blur(55px) saturate(220%)` dibiarin, tetap murah. Yang mahal adalah **4 blob yang di-animate di DALAM container ber-filter** - tiap frame maksa Chromium raster ulang seluruh window (container ber-filter nggak bisa nyimpen hasil raster kalau isinya berubah).
+- Perbaikan: 4 `@keyframes meshFlow1..4` diubah jadi **transform-only** (`translate3d` + `rotate`), `scale()` dan morph `border-radius` dibuang. Jadwal/periode animasi tetap sama, cuma properti yang diubah yang beda.
+  - A/B in-run (3 ronde, kondisi sama): GPU **18,8% -> 13,7%** (-27%), renderer **51,9% -> 48,9%**. Run lain (A/B 1 ronde): GPU **18,0% -> 6,2%** (3x lebih ringan).
+- `will-change: transform, border-radius` di blob -> `will-change: transform`. `border-radius` di situ nggak ada gunanya, cuma nyuruh browser raster ulang bentuk.
+
+### 11. Progress bar nulis `width` + `left` 60x/detik - BERES
+- `updateProgressBar()` dipanggil tiap frame rAF; throttle-nya pakai ambang `0,01%`, dan di lagu normal (200 detik) tiap frame maju **0,012%** - jadi ambangnya nggak pernah nyaring apa-apa alias **tulis DOM tiap frame**. `width` dan `left` itu properti **layout**, bukan compositor.
+- Efeknya bukan cuma di progress bar: tiap invalidasi layout maksa container blur mesh di-raster ulang juga. Terukur (A/B in-run, emulasi ambang lama vs baru): renderer **48,1% -> 38,2%** (-21%), GPU **11,1% -> 9,7%**.
+- Sekarang ambang `0,1%` (= 0,4px di bar 400px, mata nggak lihat) + guard `100 ms`. Hasil hitung nyata di app yang jalan: **10 tulisan width/detik + 10 tulisan left/detik** (terukur: 50 + 50 dalam 5 detik), dari sebelumnya 60 + 60. Scrubbing tetap responsif karena perubahan besar langsung nembus ambang.
+- `will-change: width` di `.progress-bar-fill` dibuang - `will-change` di properti layout itu anti-optimasi.
+
+### 12. Mesh dihentikan otomatis pas window nggak keliatan - BARU
+- `body.mesh-paused .mesh-fluid-blob { animation-play-state: paused }` + listener `visibilitychange` di renderer. Pas di-minimize / ketutup, animasi mesh berhenti total, jadi app yang diem di taskbar murni ~0 biaya render.
+- Diverifikasi dua arah di runtime: `document.hidden = true` -> class nyala -> `animationPlayState: paused`; balik `false` -> `running`.
+
+### Rincian sisa biaya (ronde bersih, `dur = 187s`, 70 baris lirik sinkron)
+- file apa adanya: **28,1% renderer / 8,8% GPU**
+- `updateActiveLyric()` dimatiin: 26,5% (lirik ~1,6pp)
+- tulisan `width`/`left` dimatiin: 24,9% (tulisan style ~3,2pp)
+- dua-duanya dimatiin: 22,3%
+- `updateProgressBar()` dimatiin total: 21,3%
+- window kosong (lantai): **8,8% / 2,1%**
+Kesimpulan: sisa ~12,5pp di atas lantai itu animasi mesh + compositing 60fps - biaya intrinsik dari desain "liquid glass" yang jalan terus. Kalau mau nol, satu-satunya cara ya mesh-nya dimatiin (tema/perkakas `disabled` udah ada). Angka antar ronde bisa goyang ±5pp karena instance app yang lain ikut rebutan GPU/compositor di mesin yang sama, jadi yang dipercaya itu **perbandingan A/B dalam satu run**, bukan angka absolut antar run.
