@@ -1,6 +1,6 @@
 {
   "name": "skylers-miniplayer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Aesthetic retro-pixel and ambient-glass desktop miniplayer for Windows, powered by the Windows SMTC API (works with Apple Music, Spotify, browsers, and any other media app).",
   "main": "main.js",
   "scripts": {
