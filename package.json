@@ -35,9 +35,11 @@
       "!docs/*",
       "!*.md",
       "!test_*.ps1",
-      "!test_*.js"
+      "!test_*.js",
+      "!build/make-icon.py"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -52,7 +54,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Skyler's Miniplayer"
+      "shortcutName": "Skyler's Miniplayer",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     }
   },
   "devDependencies": {

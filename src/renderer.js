@@ -206,7 +206,7 @@ const menuToggleTypewriter = document.getElementById('menuToggleTypewriter');
 const ambientGlowLayer = document.getElementById('ambientGlowLayer');
 
 let isLiquidMeshEnabled = true;
-let isTypewriterEnabled = true;
+let isTypewriterEnabled = false;
 
 // Lyric Sources & Modal State
 let currentPreferredSource = 'auto'; // 'auto' | 'lrclib' | 'qq' | 'musixmatch' | 'local'

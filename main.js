@@ -17,6 +17,16 @@ let mainWindow = null;
 let smtcProcess = null;
 let isAlwaysOnTop = true;
 
+// Set explicit AppUserModelId for Windows taskbar grouping & icon resolution
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.skilerrr.skylersminiplayer');
+}
+
+// Icon app: saat dev dipakai langsung dari build/icon.ico; di build ter-package
+// file build/icon.ico ikut di-bundle dan di-load ke window icon.
+const appIconPath = path.join(__dirname, 'build', 'icon.ico');
+const appIcon = fs.existsSync(appIconPath) ? appIconPath : (app.isPackaged ? process.execPath : undefined);
+
 // Rebrand: folder userData ngikutin nama package, jadi data lama (config, riwayat lirik,
 // posisi window) bakal keliatan 'hilang' kalau nggak dipindah. Sekali migrasi, sebelum app ready.
 (() => {
@@ -98,6 +108,7 @@ function createWindow() {
     transparent: true,
     alwaysOnTop: isAlwaysOnTop,
     resizable: true,
+    icon: appIcon,
     hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

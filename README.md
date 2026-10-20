@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="build/icon.png" width="128" alt="Skyler's Miniplayer icon">
+
 # Skyler's Miniplayer
 
 **A frameless, always-on-top desktop miniplayer for Windows** — retro-pixel and ambient-glass themes,
@@ -89,6 +91,7 @@ src/style.css      Themes, pixel typography, CRT / mesh effects
 src/renderer.js    Canvas shader, lyric engine, timeline interpolation
 src/fonts.css      @font-face declarations for the bundled fonts
 src/fonts/         Bundled font files (offline)
+build/             App icon (build/icon.ico, icon.png) and its generator, build/make-icon.py
 docs/              Performance audit and engineering notes
 lyrics/            Drop your own .lrc files here
 ```
