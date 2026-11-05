@@ -26,7 +26,6 @@ synced karaoke lyrics, and a low-overhead native SMTC bridge that reads whatever
   A total search budget keeps a lyrics-less track from hanging the UI.
 - **Album art as ambient light** — a 4-tone palette is extracted from the cover and drives a liquid mesh gradient behind the UI.
 - **8-bit dither shader & CRT overlay** — one toggle turns the cover into palette-quantized pixel art, another adds scanlines.
-- **Animated beat mascot** — a pixel cat that bobs to the music and dozes off when paused.
 - **Playback history** — the last 40 tracks with lightweight 64 px cover thumbnails.
 - **Pinnable & draggable** — frameless window, drag anywhere, pin above games or editors. Position, size and pin state
   persist across restarts.

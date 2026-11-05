@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "build": "electron-builder --win --x64",
+    "build": "electron-builder --win --x64 --publish never",
     "check": "node --check main.js && node --check preload.js && node --check lyrics_manager.js && node --check src/renderer.js"
   },
   "keywords": [

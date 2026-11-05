@@ -44,9 +44,15 @@
 
       <!-- Window Action Controls -->
       <div class="header-actions no-drag">
-        <button class="win-btn win-btn-icon" id="btnPin" title="Always on Top">📌</button>
-        <button class="win-btn win-btn-icon" id="btnMin" title="Minimize">─</button>
-        <button class="win-btn win-btn-icon win-btn-danger" id="btnClose" title="Close">✕</button>
+        <button class="win-btn win-btn-icon" id="btnPin" title="Always on Top" aria-label="Always on Top">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+        </button>
+        <button class="win-btn win-btn-icon" id="btnMin" title="Minimize" aria-label="Minimize">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M5 11h14v2H5z"/></svg>
+        </button>
+        <button class="win-btn win-btn-icon win-btn-danger" id="btnClose" title="Close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
       </div>
     </header>
 
@@ -55,19 +61,21 @@
       <!-- 2A. Synced Lyrics Area -->
       <section class="lyrics-view-area" id="lyricsViewArea">
         <div class="lyrics-top-bar">
-          <button class="lyric-source-pill" id="btnSourcePill" title="Select Lyric Source or Search Options">
-            <span class="pill-dot">✦</span>
+          <button class="lyric-source-pill" id="btnSourcePill" title="Select Lyric Source or Search Options" aria-label="Lyric Source Options">
+            <span class="pill-dot"></span>
             <span class="pill-text" id="lyricSourceLabel">Lyrics: Auto</span>
             <span class="pill-arrow">▾</span>
           </button>
-        </div>
 
         <div class="lyrics-scroll-container" id="lyricsContainer">
           <div class="lyrics-placeholder" id="lyricsPlaceholder">
             <div class="music-notes">♫ ♪ ♫</div>
             <p>Waiting for lyrics...</p>
             <span class="hint">Synced karaoke lyrics</span>
-            <button class="btn-search-lyrics hidden" id="btnSearchLyrics">🔍 Select Source / Search</button>
+            <button class="btn-search-lyrics hidden" id="btnSearchLyrics" aria-label="Select Source or Search Lyrics">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+              <span>Select Source / Search</span>
+            </button>
           </div>
           <div class="lyrics-list" id="lyricsList"></div>
         </div>
@@ -98,7 +106,7 @@
       <!-- Draggable / Scrubbable Seekbar Row -->
       <div class="timeline-row">
         <span class="time-label" id="timeCurrent">0:00</span>
-        <div class="progress-bar-container" id="progressBarContainer" title="Timeline progress">
+        <div class="progress-bar-container" id="progressBarContainer" title="Timeline progress" role="slider" tabindex="0" aria-label="Playback progress" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00 of 0:00">
           <div class="progress-bar-track">
             <div class="progress-bar-fill" id="progressBarFill"></div>
             <div class="progress-bar-thumb" id="progressBarThumb"></div>
@@ -111,29 +119,31 @@
       <div class="buttons-row">
         <!-- Left group: Theme & Visual Effects Trigger -->
         <div class="btn-group-left">
-          <button class="action-btn" id="btnThemeSelector" title="Themes & Visual Effects">•••</button>
+          <button class="action-btn" id="btnThemeSelector" title="Themes & Visual Effects" aria-label="Themes & Visual Effects">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+          </button>
         </div>
 
         <!-- Center group: Playback controls (Clean SVGs) -->
         <div class="btn-group-center">
-          <button class="ctrl-btn" id="btnPrev" title="Previous Track">
+          <button class="ctrl-btn" id="btnPrev" title="Previous Track" aria-label="Previous Track">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
-          <button class="ctrl-btn ctrl-btn-play" id="btnPlayPause" title="Play/Pause">
+          <button class="ctrl-btn ctrl-btn-play" id="btnPlayPause" title="Play/Pause" aria-label="Play or Pause">
             <svg class="icon-play" id="svgPlay" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             <svg class="icon-pause hidden" id="svgPause" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
           </button>
-          <button class="ctrl-btn" id="btnNext" title="Next Track">
+          <button class="ctrl-btn" id="btnNext" title="Next Track" aria-label="Next Track">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
           </button>
         </div>
 
         <!-- Right group: Lyrics view & History Toggle -->
         <div class="btn-group-right">
-          <button class="action-btn active" id="btnToggleLyrics" title="Lyrics View">
+          <button class="action-btn active" id="btnToggleLyrics" title="Lyrics View" aria-label="Toggle Lyrics View">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 12H7v-2h10v2zm0-3H7V9h10v2zm0-3H7V6h10v2z"/></svg>
           </button>
-          <button class="action-btn" id="btnToggleHistory" title="History">
+          <button class="action-btn" id="btnToggleHistory" title="History" aria-label="Toggle History View">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
           </button>
         </div>
@@ -146,7 +156,7 @@
     <div class="theme-popup-menu hidden" id="themePopupMenu">
       <div class="menu-header">
         <span class="menu-title">THEMES & EFFECTS</span>
-        <button class="menu-close-btn" id="btnCloseMenu">✕</button>
+        <button class="menu-close-btn" id="btnCloseMenu" aria-label="Close Menu">✕</button>
       </div>
 
       <div class="menu-content">
@@ -185,14 +195,13 @@
         <div class="menu-section">
           <div class="section-label">VISUAL EFFECTS</div>
           <div class="toggle-options-row">
-            <button class="effect-toggle-btn active" id="menuToggleMesh">🌊 Fluid Aura: ON</button>
-            <button class="effect-toggle-btn" id="menuTogglePixel">👾 8-Bit Art: OFF</button>
+            <button class="effect-toggle-btn active" id="menuToggleMesh">Fluid Aura: ON</button>
+            <button class="effect-toggle-btn" id="menuTogglePixel">8-Bit Art: OFF</button>
           </div>
           <div class="toggle-options-row" style="margin-top: 6px;">
-            <button class="effect-toggle-btn" id="menuToggleTypewriter">⌨️ Typewriter: OFF</button>
-            <button class="effect-toggle-btn" id="menuToggleCrt">⚡ CRT FX: OFF</button>
+            <button class="effect-toggle-btn" id="menuToggleTypewriter">Typewriter: OFF</button>
+            <button class="effect-toggle-btn" id="menuToggleCrt">CRT FX: OFF</button>
           </div>
-        </div>
 
         <!-- 3. Lyrics Timing Offset (Sync Delay) -->
         <div class="menu-section">
@@ -215,26 +224,25 @@
           <div class="section-label">DEFAULT LYRIC SOURCE</div>
           <div class="lyric-source-options-grid" id="menuSourceOptions">
             <button class="source-select-btn active" data-pref="auto">
-              <span class="src-icon">⚡</span>
+              <span class="src-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg></span>
               <span class="src-name">Smart Fallback (All)</span>
             </button>
             <button class="source-select-btn" data-pref="lrclib">
-              <span class="src-icon">🌐</span>
+              <span class="src-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg></span>
               <span class="src-name">LRCLIB</span>
             </button>
             <button class="source-select-btn" data-pref="qq">
-              <span class="src-icon">🎵</span>
+              <span class="src-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></span>
               <span class="src-name">QQ Music</span>
             </button>
             <button class="source-select-btn" data-pref="musixmatch">
-              <span class="src-icon">🎙️</span>
+              <span class="src-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg></span>
               <span class="src-name">Musixmatch</span>
             </button>
             <button class="source-select-btn" data-pref="local">
-              <span class="src-icon">📁</span>
+              <span class="src-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></span>
               <span class="src-name">Local (.lrc)</span>
             </button>
-          </div>
 
           <div class="mxm-token-row" id="mxmTokenRow">
             <div class="mxm-token-label">Musixmatch User Token (Optional):</div>
@@ -261,11 +269,11 @@
 
         <!-- Source Provider Tabs -->
         <div class="source-tabs-row" id="sourceTabsRow">
-          <button class="source-tab-btn active" data-source="all">⚡ All Sources</button>
-          <button class="source-tab-btn" data-source="lrclib">🌐 LRCLIB</button>
-          <button class="source-tab-btn" data-source="qq">🎵 QQ Music</button>
-          <button class="source-tab-btn" data-source="musixmatch">🎙️ Musixmatch</button>
-          <button class="source-tab-btn" data-source="local">📁 Local</button>
+          <button class="source-tab-btn active" data-source="all">All Sources</button>
+          <button class="source-tab-btn" data-source="lrclib">LRCLIB</button>
+          <button class="source-tab-btn" data-source="qq">QQ Music</button>
+          <button class="source-tab-btn" data-source="musixmatch">Musixmatch</button>
+          <button class="source-tab-btn" data-source="local">Local</button>
         </div>
 
         <!-- Query Inputs -->

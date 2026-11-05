@@ -13,19 +13,37 @@ function decodeEntities(str) {
     .replace(/&gt;/g, '>');
 }
 
-// Dice Bigram String Similarity for Candidate Verification
+// Helper: Normalize Unicode letters and numbers across all languages
+function normalizeForSim(str) {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]/gu, '');
+}
+
+// Dice Bigram String Similarity for Candidate Verification (Unicode/CJK/Accented support)
 function stringSimilarity(str1, str2) {
-  const s1 = (str1 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const s2 = (str2 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const s1 = normalizeForSim(str1);
+  const s2 = normalizeForSim(str2);
   if (!s1 && !s2) return 1.0;
   if (!s1 || !s2) return 0;
   if (s1 === s2) return 1.0;
-  if (s1.includes(s2) || s2.includes(s1)) return 0.88;
+
+  const minLen = Math.min(s1.length, s2.length);
+  const maxLen = Math.max(s1.length, s2.length);
+  if (minLen / maxLen >= 0.6 && (s1.includes(s2) || s2.includes(s1))) {
+    return 0.88;
+  }
+
+  if (s1.length < 2 || s2.length < 2) {
+    return s1 === s2 ? 1.0 : 0;
+  }
 
   const getBigrams = (str) => {
     const bigrams = new Set();
     for (let i = 0; i < str.length - 1; i++) {
-      bigrams.add(str.substring(i, i + 2));
+      bigrams.add(str.slice(i, i + 2));
     }
     return bigrams;
   };
@@ -98,14 +116,54 @@ function mxmSubtitlesToLRC(subtitlesJson) {
     const list = typeof subtitlesJson === 'string' ? JSON.parse(subtitlesJson) : subtitlesJson;
     if (!Array.isArray(list)) return '';
     return list.map(item => {
-      const min = String(item.time.minutes).padStart(2, '0');
-      const sec = String(item.time.seconds).padStart(2, '0');
-      const hun = String(item.time.hundredths).padStart(2, '0');
+      if (!item || !item.time) return '';
+      const min = String(item.time.minutes || 0).padStart(2, '0');
+      const sec = String(item.time.seconds || 0).padStart(2, '0');
+      const hun = String(item.time.hundredths || 0).padStart(2, '0');
       return `[${min}:${sec}.${hun}]${item.text || ''}`;
-    }).join('\n');
+    }).filter(Boolean).join('\n');
   } catch (e) {
     return '';
   }
+}
+
+// Clean Track & Artist names helper
+function cleanTrackName(track) {
+  if (typeof track !== 'string' || !track) return '';
+  let cleaned = track
+    .replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'")
+    .trim();
+  // Strip surrounding quotes if wrapped
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length > 2)) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned
+    .replace(/\s*\((?:feat\.|featuring|with|ft\.)\s+.*?\)/gi, '')
+    .replace(/\s*\[(?:feat\.|featuring|with|ft\.)\s+.*?\]/gi, '')
+    .replace(/\s*(?:feat\.|featuring|ft\.)\s+.*$/gi, '')
+    .replace(/\s*\((?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\)/gi, '')
+    .replace(/\s*\[(?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\]/gi, '')
+    .replace(/\s*\(\d{4}\s+(?:remaster|deluxe|edition|anniversary).*?\)/gi, '')
+    .replace(/\s*\[\d{4}\s+(?:remaster|deluxe|edition|anniversary).*?\]/gi, '')
+    .replace(/\s*\((?:from\s+|ost|soundtrack).*?\)/gi, '')
+    .replace(/[-–—]\s*(?:\d{4}\s+)?(?:Single|EP|Remastered|Remaster|Deluxe|Bonus|Version|Live|Edit|Radio Edit).*/i, '')
+    .trim();
+}
+
+function cleanArtistName(artist) {
+  if (typeof artist !== 'string' || !artist) return '';
+  const norm = artist.replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'").trim();
+  const parts = norm.split(/\s*[\u2014\u2013]\s*|\s+[-–—]\s+/);
+  let main = parts[0] || norm;
+  return main
+    .replace(/\s*(?:feat\.|featuring|ft\.|with)\s+.*$/i, '')
+    .trim();
+}
+
+function isTransientTrack(title) {
+  if (typeof title !== 'string' || !title) return true;
+  const t = title.toLowerCase().trim();
+  return t.startsWith('connecting') || t.startsWith('buffering') || t.startsWith('loading') || t === 'unknown track';
 }
 
 // Budget total buat satu pencarian mode 'auto'. Dulu worst case-nya ~45 detik
@@ -190,15 +248,17 @@ class LyricsManager {
         this.app ? path.join(this.app.getPath('userData'), 'lyrics') : null
       ].filter(Boolean);
 
-      const cleanT = (track || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const cleanA = (artist || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanT = normalizeForSim(track);
+      const cleanA = normalizeForSim(artist);
+      if (!cleanT) return null;
 
       for (const lyricsDir of candidateDirs) {
         if (!fs.existsSync(lyricsDir)) continue;
         const files = fs.readdirSync(lyricsDir);
         for (const f of files) {
           if (!f.toLowerCase().endsWith('.lrc')) continue;
-          const fBase = f.replace(/\.lrc$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const fBase = normalizeForSim(f.replace(/\.lrc$/i, ''));
+          if (!fBase) continue;
           if (fBase === cleanT || fBase === `${cleanA}${cleanT}` || fBase === `${cleanT}${cleanA}` || fBase.includes(cleanT)) {
             const fullPath = path.join(lyricsDir, f);
             const content = fs.readFileSync(fullPath, 'utf-8');
@@ -229,15 +289,15 @@ class LyricsManager {
         this.app ? path.join(this.app.getPath('userData'), 'lyrics') : null
       ].filter(Boolean);
 
-      const qLow = (query || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const qLow = normalizeForSim(query);
 
       for (const lyricsDir of candidateDirs) {
         if (!fs.existsSync(lyricsDir)) continue;
         const files = fs.readdirSync(lyricsDir);
         for (const f of files) {
           if (!f.toLowerCase().endsWith('.lrc')) continue;
-          const fClean = f.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (!qLow || fClean.includes(qLow)) {
+          const fClean = normalizeForSim(f.replace(/\.lrc$/i, ''));
+          if (!qLow || (fClean && fClean.includes(qLow))) {
             const fullPath = path.join(lyricsDir, f);
             results.push({
               id: `local_${fClean}`,
@@ -815,6 +875,11 @@ class LyricsManager {
 module.exports = {
   LyricsManager,
   decodeEntities,
+  normalizeForSim,
   stringSimilarity,
-  scoreCandidate
+  scoreCandidate,
+  mxmSubtitlesToLRC,
+  cleanTrackName,
+  cleanArtistName,
+  isTransientTrack
 };

@@ -3,7 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const readline = require('readline');
-const { LyricsManager } = require('./lyrics_manager');
+const {
+  LyricsManager,
+  cleanTrackName,
+  cleanArtistName,
+  isTransientTrack
+} = require('./lyrics_manager');
 
 let lyricsManager = null;
 
@@ -176,41 +181,6 @@ function sendSmtcCommand(cmd) {
   }
 }
 
-// Clean Track & Artist names helper
-function cleanTrackName(track) {
-  if (!track) return '';
-  return track
-    .replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'")
-    .replace(/^["'\s]+|["'\s]+$/g, '')
-    .replace(/\s*\((?:feat\.|featuring|with|ft\.)\s+.*?\)/gi, '')
-    .replace(/\s*\[(?:feat\.|featuring|with|ft\.)\s+.*?\]/gi, '')
-    .replace(/\s*(?:feat\.|featuring|ft\.)\s+.*$/gi, '')
-    .replace(/\s*\((?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\)/gi, '')
-    .replace(/\s*\[(?:remastered|remaster|deluxe|bonus track|anniversary|expanded|explicit|clean|mono|stereo|spatial|atmos).*?\]/gi, '')
-    .replace(/\s*\(\d{4}\s+(?:remaster|deluxe|edition|anniversary).*?\)/gi, '')
-    .replace(/\s*\[\d{4}\s+(?:remaster|deluxe|edition|anniversary).*?\]/gi, '')
-    .replace(/\s*\((?:from\s+|ost|soundtrack).*?\)/gi, '')
-    .replace(/[-–—]\s*(?:Single|EP|Remastered|Remaster|Deluxe|Bonus|Version|Live|Edit|Radio Edit).*/i, '')
-    .trim();
-}
-
-function cleanArtistName(artist) {
-  if (!artist) return '';
-  const norm = artist.replace(/[\u2018\u2019\u2032\u0060\u00B4]/g, "'").trim();
-  // Only split on em-dash, en-dash, or hyphen with surrounding spaces (preserves Jay-Z, Blink-182)
-  const parts = norm.split(/\s*[\u2014\u2013]\s*|\s+[-–—]\s+/);
-  let main = parts[0] || norm;
-  return main
-    .replace(/\s*(?:feat\.|featuring|ft\.|with)\s+.*$/i, '')
-    .trim();
-}
-
-function isTransientTrack(title) {
-  if (!title) return true;
-  const t = title.toLowerCase().trim();
-  return t.startsWith('connecting') || t.startsWith('buffering') || t.startsWith('loading') || t === 'unknown track';
-}
-
 // Synced & Multi-Source Lyrics Fetcher
 async function fetchLyrics(rawTrack, rawArtist, duration, preferredSource = 'auto') {
   if (!rawTrack || isTransientTrack(rawTrack)) return null;
@@ -294,12 +264,19 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+function killSmtcProcess() {
   if (smtcProcess) {
     try {
       smtcProcess.kill();
-    } catch {}
+    } catch (e) {}
+    smtcProcess = null;
   }
+}
+
+app.on('before-quit', killSmtcProcess);
+
+app.on('window-all-closed', () => {
+  killSmtcProcess();
   if (process.platform !== 'darwin') {
     app.quit();
   }

@@ -47,12 +47,20 @@ try {
 } catch (e) {}
 
 function setLyricTimingOffset(val) {
+  if (typeof val !== 'number' || isNaN(val)) val = 0;
   lyricTimingOffset = Math.round(val * 100) / 100;
   lyricTimingOffset = Math.max(-10, Math.min(10, lyricTimingOffset));
   try {
     localStorage.setItem('miniplayer_lyric_offset', lyricTimingOffset.toString());
   } catch (e) {}
   updateDelayDisplay();
+  if (currentDuration > 0) {
+    updateActiveLyric(currentPosition);
+  }
+}
+
+function getLyricTimingOffset() {
+  return lyricTimingOffset;
 }
 
 function updateDelayDisplay() {
@@ -905,6 +913,9 @@ function updateProgressBar() {
   if (curStr !== lastCurrentTimeStr) {
     lastCurrentTimeStr = curStr;
     timeCurrentEl.textContent = curStr;
+    progressBarContainer.setAttribute('aria-valuenow', Math.round(displayPos).toString());
+    progressBarContainer.setAttribute('aria-valuemax', Math.round(currentDuration).toString());
+    progressBarContainer.setAttribute('aria-valuetext', `${curStr} of ${formatTime(currentDuration)}`);
   }
 
   const remStr = `-${formatTime(remaining)}`;
@@ -999,6 +1010,30 @@ progressBarContainer.addEventListener('mousedown', (e) => {
 
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('mouseup', onMouseUp);
+});
+
+// Accessible Keyboard Navigation for Timeline
+progressBarContainer.addEventListener('keydown', (e) => {
+  if (currentDuration <= 0) return;
+  let seekTarget = null;
+  const STEP = 5;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+    seekTarget = Math.min(currentDuration, currentPosition + STEP);
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+    seekTarget = Math.max(0, currentPosition - STEP);
+  } else if (e.key === 'Home') {
+    seekTarget = 0;
+  } else if (e.key === 'End') {
+    seekTarget = Math.max(0, currentDuration - 1);
+  }
+  if (seekTarget !== null) {
+    e.preventDefault();
+    seekCooldownUntil = performance.now() + 1400;
+    currentPosition = seekTarget;
+    lastTickTime = performance.now();
+    window.miniplayerAPI.sendMediaCommand('seek', seekTarget);
+    updateProgressBar();
+  }
 });
 
 // Theme Selection
@@ -1155,7 +1190,7 @@ if (menuToggleMesh) {
   menuToggleMesh.addEventListener('click', () => {
     isLiquidMeshEnabled = !isLiquidMeshEnabled;
     menuToggleMesh.classList.toggle('active', isLiquidMeshEnabled);
-    menuToggleMesh.textContent = isLiquidMeshEnabled ? '🌊 Fluid Aura: ON' : '🌊 Fluid Aura: OFF';
+    menuToggleMesh.textContent = isLiquidMeshEnabled ? 'Fluid Aura: ON' : 'Fluid Aura: OFF';
     if (ambientGlowLayer) {
       ambientGlowLayer.classList.toggle('disabled', !isLiquidMeshEnabled);
     }
@@ -1167,7 +1202,7 @@ if (menuToggleTypewriter) {
   menuToggleTypewriter.addEventListener('click', () => {
     isTypewriterEnabled = !isTypewriterEnabled;
     menuToggleTypewriter.classList.toggle('active', isTypewriterEnabled);
-    menuToggleTypewriter.textContent = isTypewriterEnabled ? '⌨️ Typewriter: ON' : '⌨️ Typewriter: OFF';
+    menuToggleTypewriter.textContent = isTypewriterEnabled ? 'Typewriter: ON' : 'Typewriter: OFF';
     if (!isTypewriterEnabled && activeLyricIndex >= 0 && parsedLyrics[activeLyricIndex] && !parsedLyrics[activeLyricIndex].isDots) {
       const activeEl = lyricsList.querySelector(`.lyric-line[data-index="${activeLyricIndex}"]`);
       if (activeEl) {
@@ -1208,7 +1243,7 @@ if (btnDelayReset) {
 menuTogglePixel.addEventListener('click', () => {
   is8BitDither = !is8BitDither;
   menuTogglePixel.classList.toggle('active', is8BitDither);
-  menuTogglePixel.textContent = is8BitDither ? '👾 8-Bit Art: ON' : '👾 8-Bit Art: OFF';
+  menuTogglePixel.textContent = is8BitDither ? '8-Bit Art: ON' : '8-Bit Art: OFF';
   renderCoverArt();
 });
 
@@ -1216,7 +1251,7 @@ menuTogglePixel.addEventListener('click', () => {
 menuToggleCrt.addEventListener('click', () => {
   isCrtEnabled = !isCrtEnabled;
   menuToggleCrt.classList.toggle('active', isCrtEnabled);
-  menuToggleCrt.textContent = isCrtEnabled ? '⚡ CRT FX: ON' : '⚡ CRT FX: OFF';
+  menuToggleCrt.textContent = isCrtEnabled ? 'CRT FX: ON' : 'CRT FX: OFF';
   crtOverlay.classList.toggle('disabled', !isCrtEnabled);
 });
 
