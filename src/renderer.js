@@ -87,6 +87,7 @@ function updateDelayDisplay() {
 // Parsed Lyrics array [{ time: 12.5, text: "...", isDots: false, endTime: 16.0 }]
 let parsedLyrics = [];
 let activeLyricIndex = -1;
+let renderedLyricEls = [];
 let currentLyricsTrackKey = '';
 let hasSyncedLyrics = false;
 let lyricsFetchCounter = 0;
@@ -108,6 +109,18 @@ try {
 const HISTORY_COVER_PX = 64;      // kartu history cuma 38px, thumbnail sekecil ini udah lebih dari cukup
 const HISTORY_COVER_MAX = 20000;  // hard cap: cover lebih gede dari ini nggak boleh masuk storage
 
+let shrinkCanvas = null;
+let shrinkCtx = null;
+function getShrinkCanvas() {
+  if (!shrinkCanvas) {
+    shrinkCanvas = document.createElement('canvas');
+    shrinkCanvas.width = HISTORY_COVER_PX;
+    shrinkCanvas.height = HISTORY_COVER_PX;
+    shrinkCtx = shrinkCanvas.getContext('2d');
+  }
+  return { canvas: shrinkCanvas, ctx: shrinkCtx };
+}
+
 // Cover dari bridge itu ~190 KB data-URI; disimpen 40x bikin localStorage bengkak 15 MB.
 // Kecilin ke JPEG 64px sebelum disimpen.
 function shrinkCover(dataUrl) {
@@ -117,10 +130,9 @@ function shrinkCover(dataUrl) {
     const im = new Image();
     im.onload = () => {
       try {
-        const c = document.createElement('canvas');
-        c.width = HISTORY_COVER_PX;
-        c.height = HISTORY_COVER_PX;
-        c.getContext('2d').drawImage(im, 0, 0, HISTORY_COVER_PX, HISTORY_COVER_PX);
+        const { canvas: c, ctx: cx } = getShrinkCanvas();
+        cx.clearRect(0, 0, HISTORY_COVER_PX, HISTORY_COVER_PX);
+        cx.drawImage(im, 0, 0, HISTORY_COVER_PX, HISTORY_COVER_PX);
         resolve(c.toDataURL('image/jpeg', 0.72));
       } catch (err) {
         resolve('');
@@ -259,9 +271,10 @@ function escapeHtml(str) {
 
 // --- Helper: Format seconds to M:SS ---
 function formatTime(seconds) {
-  if (isNaN(seconds) || seconds < 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
+  if (typeof seconds !== 'number' || !isFinite(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
@@ -401,6 +414,7 @@ function drawDefaultPixelArt() {
 }
 
 // --- Cover Art & Dither Canvas Renderer ---
+let lastExtractedCoverSrc = '';
 function renderCoverArt() {
   const currentTheme = THEMES[currentThemeIndex];
   const usePixelArt = is8BitDither || currentTheme.isPixel;
@@ -441,7 +455,10 @@ function renderCoverArt() {
   }
 
   if (rawCoverImg.src && rawCoverImg.naturalWidth > 0) {
-    extractTrueAlbumColors(rawCoverImg);
+    if (rawCoverImg.src !== lastExtractedCoverSrc) {
+      lastExtractedCoverSrc = rawCoverImg.src;
+      extractTrueAlbumColors(rawCoverImg);
+    }
   }
 }
 
@@ -543,6 +560,7 @@ function updateSourcePillDisplay(sourceName) {
 
 function renderLyricsList() {
   lyricsList.innerHTML = '';
+  renderedLyricEls = [];
   activeLyricIndex = -1;
   lyricsContainer.scrollTop = 0;
 
@@ -591,6 +609,7 @@ function renderLyricsList() {
     if (lyric.isDots) {
       lineEl.className = 'lyric-line lyric-dots';
       lineEl.innerHTML = '<span class="dot dot-1"></span><span class="dot dot-2"></span><span class="dot dot-3"></span>';
+      lineEl._dots = Array.from(lineEl.querySelectorAll('.dot'));
     } else {
       lineEl.className = 'lyric-line';
       lineEl.textContent = lyric.text;
@@ -612,6 +631,7 @@ function renderLyricsList() {
       });
     }
 
+    renderedLyricEls.push(lineEl);
     frag.appendChild(lineEl);
   });
 
@@ -633,27 +653,48 @@ function updateActiveLyric(rawTime) {
 
   const time = rawTime + lyricTimingOffset;
 
+  const len = parsedLyrics.length;
   let activeIdx = -1;
-  for (let i = 0; i < parsedLyrics.length; i++) {
-    const lyric = parsedLyrics[i];
-    if (lyric.time < 0) continue;
-    const nextTime = (i < parsedLyrics.length - 1) ? parsedLyrics[i + 1].time : (lyric.endTime || lyric.time + 9999);
 
-    if (time >= lyric.time && time < nextTime) {
-      activeIdx = i;
-      break;
-    } else if (time >= lyric.time) {
-      activeIdx = i;
+  // Fast path 1: same lyric line as previous frame (99% of 60fps ticks)
+  if (activeLyricIndex >= 0 && activeLyricIndex < len) {
+    const cur = parsedLyrics[activeLyricIndex];
+    if (cur.time >= 0) {
+      const nextTime = (activeLyricIndex < len - 1) ? parsedLyrics[activeLyricIndex + 1].time : (cur.endTime || cur.time + 9999);
+      if (time >= cur.time && time < nextTime) {
+        activeIdx = activeLyricIndex;
+      } else if (activeLyricIndex + 1 < len) {
+        // Fast path 2: just moved to immediate next line
+        const next = parsedLyrics[activeLyricIndex + 1];
+        const nextNextTime = (activeLyricIndex + 1 < len - 1) ? parsedLyrics[activeLyricIndex + 2].time : (next.endTime || next.time + 9999);
+        if (time >= next.time && time < nextNextTime) {
+          activeIdx = activeLyricIndex + 1;
+        }
+      }
     }
   }
 
+  // Fallback: binary search in O(log N) on seeks or jumps
+  if (activeIdx === -1) {
+    let low = 0;
+    let high = len - 1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (parsedLyrics[mid].time <= time) {
+        activeIdx = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+  }
   if (activeIdx !== activeLyricIndex) {
     const oldIdx = activeLyricIndex;
     activeLyricIndex = activeIdx;
     
     // Restore clean static text on previous lyric element
     if (oldIdx >= 0 && parsedLyrics[oldIdx] && !parsedLyrics[oldIdx].isDots) {
-      const prev = lyricsList.querySelector(`.lyric-line[data-index="${oldIdx}"]`);
+      const prev = renderedLyricEls[oldIdx] || lyricsList.querySelector(`.lyric-line[data-index="${oldIdx}"]`);
       if (prev) {
         prev.classList.remove('active');
         prev.textContent = parsedLyrics[oldIdx].text;
@@ -665,7 +706,7 @@ function updateActiveLyric(rawTime) {
     }
 
     if (activeIdx >= 0) {
-      const activeEl = lyricsList.querySelector(`.lyric-line[data-index="${activeIdx}"]`);
+      const activeEl = renderedLyricEls[activeIdx] || lyricsList.querySelector(`.lyric-line[data-index="${activeIdx}"]`);
       if (activeEl) {
         activeEl.classList.add('active');
 
@@ -684,7 +725,7 @@ function updateActiveLyric(rawTime) {
 
   // Real-time Synced Typewriter Animation on the active lyric line (pure text, no cursor bar)
   if (activeLyricIndex >= 0 && isTypewriterEnabled && parsedLyrics[activeLyricIndex] && !parsedLyrics[activeLyricIndex].isDots) {
-    const activeEl = lyricsList.querySelector(`.lyric-line[data-index="${activeLyricIndex}"]`);
+    const activeEl = renderedLyricEls[activeLyricIndex] || lyricsList.querySelector(`.lyric-line[data-index="${activeLyricIndex}"]`);
     const activeLyric = parsedLyrics[activeLyricIndex];
     if (activeEl && activeLyric) {
       const nextLyric = (activeLyricIndex < parsedLyrics.length - 1) ? parsedLyrics[activeLyricIndex + 1] : null;
@@ -708,9 +749,9 @@ function updateActiveLyric(rawTime) {
 
   // Real-time 3-dot countdown sync leading into vocals
   if (activeLyricIndex >= 0 && parsedLyrics[activeLyricIndex] && parsedLyrics[activeLyricIndex].isDots) {
-    const activeEl = lyricsList.querySelector(`.lyric-line[data-index="${activeLyricIndex}"]`);
+    const activeEl = renderedLyricEls[activeLyricIndex] || lyricsList.querySelector(`.lyric-line[data-index="${activeLyricIndex}"]`);
     if (activeEl) {
-      const dots = activeEl.querySelectorAll('.dot');
+      const dots = activeEl._dots || activeEl.querySelectorAll('.dot');
       if (dots.length === 3) {
         const remaining = parsedLyrics[activeLyricIndex].endTime - time;
         dots[0].classList.toggle('filled', remaining <= 3.05);
@@ -941,14 +982,17 @@ function updateProgressBar() {
   }
 }
 
-// Hemat daya: hentikan animasi mesh saat window nggak keliatan (minimize/ketutup).
+// Hemat daya: hentikan animasi mesh & update DOM saat window nggak keliatan (minimize/ketutup).
 document.addEventListener('visibilitychange', () => {
   bodyEl.classList.toggle('mesh-paused', document.hidden);
+  if (!document.hidden && isPlaying && currentDuration > 0 && !isScrubbing) {
+    updateProgressBar();
+  }
 });
 
 // 60FPS requestAnimationFrame tick loop
 function animationLoop() {
-  if (isPlaying && currentDuration > 0 && !isScrubbing) {
+  if (isPlaying && currentDuration > 0 && !isScrubbing && !document.hidden) {
     updateProgressBar();
   }
   requestAnimationFrame(animationLoop);
@@ -976,6 +1020,7 @@ btnPrev.addEventListener('click', () => {
 function calculateSeekTime(e) {
   if (currentDuration <= 0) return 0;
   const rect = progressBarContainer.getBoundingClientRect();
+  if (!rect || rect.width <= 0) return 0;
   const clickX = e.clientX - rect.left;
   const ratio = Math.max(0, Math.min(1, clickX / rect.width));
   return ratio * currentDuration;
@@ -1615,3 +1660,18 @@ updateSourcePillDisplay(currentPreferredSource === 'auto' ? 'Auto' : currentPref
 
 // Migrasi satu kali: cover history lama (190 KB/entry) dikecilin jadi thumbnail 64px
 shrinkHistoryCovers();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    THEMES,
+    APP_NAME,
+    escapeHtml,
+    formatTime,
+    parseLRC,
+    setLyricTimingOffset,
+    getLyricTimingOffset,
+    updateActiveLyric,
+    calculateSeekTime,
+    shrinkCover
+  };
+}
